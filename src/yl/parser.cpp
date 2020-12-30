@@ -1,3 +1,4 @@
+#include <iostream>
 #include <yl/either.hpp>
 #include <bits/c++config.h>
 #include <cctype>
@@ -31,10 +32,6 @@ namespace yl {
       ++curr;
     }
 
-    if (curr == start) {
-      return fail(error_info{"Expected a token.", curr});
-    }
-
     return succeed(poly_base{new terminal{start, ::std::string(line + start, line + curr)}});
   }
 
@@ -49,13 +46,13 @@ namespace yl {
 
     while (!is_eof(line, curr) && line[curr] != ')') {
       if (line[curr] == '(') {
-        if (auto res = parse_expression(line, ++curr); !res.is_error) {
+        if (auto res = parse_expression(line, ++curr); res) {
           expr->args.emplace_back(res.value());
         } else {
           return res;
         }
       } else {
-        if (auto res = parse_terminal(line, curr); !res.is_error) {
+        if (auto res = parse_terminal(line, curr); res) {
           expr->args.emplace_back(res.value());
         } else {
           return res;
@@ -71,22 +68,18 @@ namespace yl {
         return fail(error_info{"Expected closing parenthesis.", curr});
       }
     }
-
-    if (expr->args.empty()) {
-      return fail(error_info{"Expression expected.", curr});
-    }
     
-    return succeed(poly_base{expr});
+    return succeed(expr->copy());
   }
 
   either<error_info, poly_base> parse_polish(char const* line) noexcept {
     pos p = 0;
-    bool close_parenthesis = false;
-    if (line[p] == '(') {
-      ++p;
-      close_parenthesis = true;
+    auto ret = parse_expression(line, p, false);
+    //return ret;
+    if (line[p] == ')') {
+      return fail(error_info{"Unmatched parenthesis.", p});
     }
-    return parse_expression(line, p, close_parenthesis);
+    return ret;
   }
 
 }

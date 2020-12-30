@@ -37,7 +37,16 @@ namespace yl {
       if (e->args.empty()) {
         return fail(error_info{"Can not evaluate empty expression.", e->start});
       } else if (e->args.size() < 3) {
-        return fail(error_info{"Expression must be atleast binary.", e->start});
+        if (e->args.size() == 1) {
+          return eval(e->args.front());
+        } else {
+          return fail(error_info{
+            "Expression must be either a unit, or an n-ary expression with atleast 2 operands.\n"
+            "  unit: (+ 2 3)\n"
+            "  n-ary: + 2 3 4 5 (+ 2 3)",
+            e->start
+          });
+        }
       }
 
       if (auto t = dynamic_cast<terminal const*>(e->args.front().get()); t) {

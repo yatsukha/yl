@@ -1,4 +1,5 @@
 #include <cstdlib>
+#include <cstring>
 #include <ios>
 #include <iostream>
 #include <limits>
@@ -11,7 +12,9 @@
 #include <yl/parser.hpp>
 #include <yl/eval_polish.hpp>
 
-int main() {
+int main(int const argc, char const* const* argv) {
+
+  bool const print_tree = argc == 2 && !strcmp(argv[1], "-v");
 
   ::std::cout << "yatsukha's lisp" << "\n";
   
@@ -34,8 +37,12 @@ int main() {
       continue;
     }
 
-    if (auto expr = ::yl::parse_polish(input.get()); !expr.is_error) {
-      if (auto res = ::yl::eval(expr.value()); !res.is_error) {
+    if (auto expr = ::yl::parse_polish(input.get()); expr) {
+      if (print_tree) {
+        expr.value()->print(::std::cout); ::std::cout << "\n";
+      }
+
+      if (auto res = ::yl::eval(expr.value()); res) {
         ::std::cout << "Result: " << res.value();
       } else {
         print_error(input.get(), res.error());
@@ -45,7 +52,6 @@ int main() {
     }
 
     ::std::cout << "\n";
-
     ::add_history(input.get());
   }
 
