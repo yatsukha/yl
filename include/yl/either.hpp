@@ -7,10 +7,6 @@
 namespace yl {
 
   template<typename E, typename S = void>
-//           typename = ::std::enable_if_t<
-//             ::std::is_trivially_destructible_v<E> || ::std::is_same_v<void, E>>,
-//           typename = ::std::enable_if_t<
-//             ::std::is_trivially_destructible_v<S> || ::std::is_same_v<void, S>>>
   class either {
     using _E = ::std::conditional_t<::std::is_same_v<void, E>, char, E>;  
     auto constexpr static sz_e = sizeof(_E);
@@ -124,6 +120,6 @@ namespace yl {
     either<E> ret{true};
     new (ret.data) ::std::remove_reference_t<E>{e};
     return ret;
-  }
+  } 
 
 }

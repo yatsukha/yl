@@ -36,8 +36,8 @@ namespace yl {
 
       if (e->args.empty()) {
         return fail(error_info{"Can not evaluate empty expression.", e->start});
-      } else if (e->args.size() != 3) {
-        return fail(error_info{"Only binary expressions currently supported.", e->start});
+      } else if (e->args.size() < 3) {
+        return fail(error_info{"Expression must be atleast binary.", e->start});
       }
 
       if (auto t = dynamic_cast<terminal const*>(e->args.front().get()); t) {
@@ -47,16 +47,24 @@ namespace yl {
         }
 
         auto operation = ops[op];
-        auto a = eval(e->args[1]);
-        auto b = eval(e->args[2]);
+        auto current = eval(e->args[1]);
 
-        if (a.is_error) {
-          return a;
-        } else if (b.is_error) {
-          return b;
+        if (!current) {
+          return current;
         }
 
-        return succeed(operation(a.value(), b.value()));
+        auto running_result = current.value();
+
+        for (::std::size_t i = 2; i < e->args.size(); ++i) {
+          current = eval(e->args[i]);
+          if (!current) {
+            return current;
+          }
+
+          running_result = operation(running_result, current.value());
+        }
+
+        return succeed(running_result);
       } else {
         return fail(error_info{"Expected a token.", e->args.front()->start});
       }
