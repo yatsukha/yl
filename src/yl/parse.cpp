@@ -1,9 +1,10 @@
+#include "yl/util.hpp"
 #include <iostream>
 #include <yl/either.hpp>
 #include <bits/c++config.h>
 #include <cctype>
 #include <memory>
-#include <yl/parser.hpp>
+#include <yl/parse.hpp>
 
 namespace yl {
 
@@ -26,9 +27,14 @@ namespace yl {
   }
 
   parse_result parse_terminal(char const* line, prf curr) noexcept { 
+    auto const static is_paren = [](auto&& c) {
+      return c == '(' || c == ')'
+              || c == '{' || c == '}';
+    };
+
     pos const start = curr;
     while (!is_eof(line, curr) && !::std::isblank(line[curr]) 
-            && line[curr] != '(' && line[curr] != ')') {
+            && !is_paren(line[curr])) {
       ++curr;
     }
 
@@ -36,18 +42,28 @@ namespace yl {
   }
 
   parse_result parse_expression(char const* line, prf curr,
-                                bool const close_parenthesis = true) noexcept {
+                                char const close_parenthesis = '\0') noexcept {
     skip(line, curr);
     if (is_eof(line, curr)) {
       return fail(error_info{"Expression expected.", curr});
     }
 
     auto expr = ::std::make_shared<expression>(curr);
+    auto const static left_paren = [](auto&& c) {
+      return c == '(' || c == '{';
+    };
+    auto const static right_paren = [](auto&& c) {
+      return c == ')' || c == '}';
+    };
 
-    while (!is_eof(line, curr) && line[curr] != ')') {
-      if (line[curr] == '(') {
-        if (auto res = parse_expression(line, ++curr); res) {
+    while (!is_eof(line, curr) && !right_paren(line[curr])) {
+      if (left_paren(line[curr])) {
+        bool const q = line[curr] == '{';
+        auto closing = q ? '}' : ')';
+
+        if (auto res = parse_expression(line, ++curr, closing); res) {
           expr->args.emplace_back(res.value());
+          dynamic_cast<expression*>(expr->args.back().get())->q = q;
         } else {
           return res;
         }
@@ -62,21 +78,30 @@ namespace yl {
     }
 
     if (close_parenthesis) {
-      if (!is_eof(line, curr) && line[curr] == ')') {
+      if (!is_eof(line, curr) && right_paren(line[curr])) {
+        if (line[curr] != close_parenthesis) {
+          return fail(error_info{
+            concat("Differing parentesis, expected ", close_parenthesis, " got ",
+                   line[curr], "."),
+            curr
+          });
+        }
         ++curr;
       } else {
         return fail(error_info{"Expected closing parenthesis.", curr});
       }
     }
     
-    return succeed(expr->copy());
+    return succeed(poly_base{expr});
   }
 
-  either<error_info, poly_base> parse_polish(char const* line) noexcept {
+  either<error_info, poly_base> parse(char const* line) noexcept {
     pos p = 0;
     auto ret = parse_expression(line, p, false);
-    //return ret;
-    if (line[p] == ')') {
+    if (!ret) {
+      return ret;
+    }
+    if (line[p] == ')' || line[p] == '}') {
       return fail(error_info{"Unmatched parenthesis.", p});
     }
     return ret;

@@ -42,22 +42,24 @@ namespace yl {
 
   struct expression : base {
     ::std::vector<poly_base> args;
+    bool q;
     
-    expression(::std::size_t const start) noexcept : base(start) {}
+    expression(::std::size_t const start, bool const q_expr = false) noexcept 
+      : base(start), q(q_expr) {}
 
     virtual void print(::std::ostream& out) const noexcept override {
-      out << "(";
+      out << (q ? "{" : "(");
       for (::std::size_t i = 0; i < args.size(); ++i) {
         if (i) {
           out << " ";
         }
         args[i]->print(out);
       }
-      out << ")";
+      out << (q ? "}" : ")");
     }
 
     virtual poly_base copy() const noexcept override {
-      auto other = new expression{start};
+      auto other = new expression{start, q};
       other->args.reserve(args.size());
       for (auto&& arg : args) {
         other->args.push_back(arg->copy());
@@ -67,12 +69,12 @@ namespace yl {
   };
 
   struct error_info {
-    char const* error_message;
+    ::std::string error_message;
     ::std::size_t const column;
   };
 
   using parse_result = either<error_info, poly_base>;
 
-  parse_result parse_polish(char const* line) noexcept;
+  parse_result parse(char const* line) noexcept;
 
 }

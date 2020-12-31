@@ -4,8 +4,8 @@ executable(
   'interpeter',
   sources: [
     'src/main.cpp',
-    'src/yl/parser.cpp',
-    'src/yl/eval_polish.cpp',
+    'src/yl/parse.cpp',
+    'src/yl/eval.cpp',
   ],
   include_directories: [
     'include'

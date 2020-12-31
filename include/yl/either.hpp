@@ -48,23 +48,69 @@ namespace yl {
       }
     }
 
-    either(either const&) noexcept = default;
-    either& operator=(either const&) noexcept = default;
+    either(either const& other) noexcept { 
+      if (other) {
+        if constexpr (!::std::is_same_v<void, S>) {
+          new (data) S(other.value());
 
-    either(either&& other) noexcept {
-      std::memcpy(data, other.data, max_sz);
+        }
+      } else {
+        if constexpr (!::std::is_same_v<void, E>) {
+          new (data) E(other.error());
+        }
+      }
       state = other.state;
-      other.state |= 0b10;
+      state &= 0b01;
     }
 
-    either& operator=(either&& other) noexcept {
-      std::memcpy(data, other.data, max_sz);
+    either& operator=(either const& other) noexcept {
+      if (other) {
+        if constexpr (!::std::is_same_v<void, S>) {
+          new (data) S(other.value());
+        }
+      } else {
+        if constexpr (!::std::is_same_v<void, E>) {
+          new (data) E(other.error());
+        }
+      }
       state = other.state;
-      other.state |= 0b10;
+      state &= 0b01;
       return *this;
     }
 
-    template<typename EE, typename = ::std::enable_if<::std::is_same_v<void, E>>>
+    either(either&& other) noexcept {
+      if (other) {
+        if constexpr (!::std::is_same_v<void, S>) {
+          new (data) S(other.value());
+
+        }
+      } else {
+        if constexpr (!::std::is_same_v<void, E>) {
+          new (data) E(other.error());
+        }
+      }
+      state = other.state;
+      other.state |= 0b10;
+      state &= 0b01;
+    }
+
+    either& operator=(either&& other) noexcept {
+      if (other) {
+        if constexpr (!::std::is_same_v<void, S>) {
+          new (data) S(other.value());
+        }
+      } else {
+        if constexpr (!::std::is_same_v<void, E>) {
+          new (data) E(other.error());
+        }
+      }
+      state = other.state;
+      other.state |= 0b10;
+      state &= 0b01;
+      return *this;
+    }
+
+    template<typename EE>
     operator either<EE, S>() const noexcept {
       if (is_error()) {
         terminate_with("Invalid widening from a void error value.");
@@ -77,7 +123,7 @@ namespace yl {
       return ret;
     }
 
-    template<typename SS, typename = ::std::enable_if<::std::is_same_v<void, S>>>
+    template<typename SS>
     operator either<E, SS>() const noexcept {
       if (!is_error()) {
         terminate_with("Invalid widening from a void success value.");
@@ -134,17 +180,17 @@ namespace yl {
     return either<void, void>{false};
   }
  
-  template<typename S>
-  inline either<void, S> succeed(S s) noexcept {
-    either<void, S> e{false};
-    new (e.data) ::std::remove_reference_t<S>{s};
+  template<typename S, typename SS = ::std::remove_reference_t<S>>
+  inline either<void, SS> succeed(S s) noexcept {
+    either<void, SS> e{false};
+    new (e.data) SS{s};
     return e;
   }    
 
-  template<typename E>
-  inline either<E> fail(E e) noexcept {
-    either<E> ret{true};
-    new (ret.data) ::std::remove_reference_t<E>{e};
+  template<typename E, typename EE = ::std::remove_reference_t<E>>
+  inline either<EE> fail(E e) noexcept {
+    either<EE> ret{true};
+    new (ret.data) EE{e};
     return ret;
   } 
 

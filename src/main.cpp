@@ -9,8 +9,8 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
-#include <yl/parser.hpp>
-#include <yl/eval_polish.hpp>
+#include <yl/parse.hpp>
+#include <yl/eval.hpp>
 
 int main(int const argc, char const* const* argv) {
 
@@ -37,13 +37,18 @@ int main(int const argc, char const* const* argv) {
       continue;
     }
 
-    if (auto expr = ::yl::parse_polish(input.get()); expr) {
-      if (print_tree) {
-        expr.value()->print(::std::cout); ::std::cout << "\n";
-      }
+    if (auto expr = ::yl::parse(input.get()); expr) {
+      auto tree = expr.value();
 
-      if (auto res = ::yl::eval(expr.value()); res) {
-        ::std::cout << "Result: " << res.value();
+      if (auto res = ::yl::eval(tree); res) {
+        if (auto rr = res.value(); rr) {
+          if (print_tree) {
+            expr.value()->print(::std::cout); ::std::cout << "\n";
+          }
+          ::std::cout << "Result: " << rr.value();
+        } else {
+          rr.error()->print(::std::cout);
+        }
       } else {
         print_error(input.get(), res.error());
       }
