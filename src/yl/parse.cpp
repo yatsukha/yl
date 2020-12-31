@@ -57,23 +57,28 @@ namespace yl {
     };
 
     while (!is_eof(line, curr) && !right_paren(line[curr])) {
-      if (left_paren(line[curr])) {
-        bool const q = line[curr] == '{';
-        auto closing = q ? '}' : ')';
+      if (!left_paren(line[curr])) {
+        auto const old = curr;
 
-        if (auto res = parse_expression(line, ++curr, closing); res) {
-          expr->args.emplace_back(res.value());
-          dynamic_cast<expression*>(expr->args.back().get())->q = q;
-        } else {
-          return res;
-        }
-      } else {
         if (auto res = parse_terminal(line, curr); res) {
           expr->args.emplace_back(res.value());
-        } else {
-          return res;
+          skip(line, curr);
+          continue;
         }
+
+        curr = old;
       }
+
+      bool const q = line[curr] == '{';
+      auto closing = q ? '}' : ')';
+
+      if (auto res = parse_expression(line, ++curr, closing); res) {
+        expr->args.emplace_back(res.value());
+        dynamic_cast<expression*>(expr->args.back().get())->q = q;
+      } else {
+        return res;
+      }
+
       skip(line, curr);
     }
 

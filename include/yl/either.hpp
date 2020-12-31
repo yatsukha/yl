@@ -16,6 +16,9 @@ namespace yl {
     auto constexpr static max_sz = ::std::max(sz_e, sz_s);
 
    public:
+    using error_type = E;
+    using success_type = S;
+
     // the price to pay
     alignas(::std::max(alignof(_E), alignof(_S))) char data[max_sz];
 
