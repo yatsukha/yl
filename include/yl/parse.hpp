@@ -1,80 +1,43 @@
 #pragma once
 
-#include <memory>
 #include <ostream>
+#include <string>
 #include <vector>
+#include <variant>
 
 #include <yl/either.hpp>
 
 namespace yl {
 
-  struct base;
+  // base types
 
-  using poly_base = ::std::shared_ptr<base>;
+  struct ls;
+  using numeric = double;
+  using symbol  = ::std::string;
 
-  struct base {
-    ::std::size_t start;
+  using expression = ::std::variant<numeric, symbol, ls>;
 
-    base(::std::size_t const start) noexcept : start(start) {}
+  struct parse_unit;
 
-    virtual void print(::std::ostream& out) const noexcept = 0;
-    virtual poly_base copy() const noexcept = 0;
-
-    virtual ~base() = default;
+  struct ls {
+    bool q = false;
+    ::std::vector<parse_unit> children;
   };
 
-
-  struct terminal : base {
-    ::std::string data;
-
-    terminal(::std::size_t const start, ::std::string const data) noexcept
-      : base(start), data(data) {}
-
-    virtual void print(::std::ostream& out) const noexcept override {
-      out << data;
-    }
-
-    virtual poly_base copy() const noexcept override {
-      auto other = new terminal{start, data};
-      return poly_base{other};
-    }
-  };
-
-  struct expression : base {
-    ::std::vector<poly_base> args;
-    bool q;
-    
-    expression(::std::size_t const start, bool const q_expr = false) noexcept 
-      : base(start), q(q_expr) {}
-
-    virtual void print(::std::ostream& out) const noexcept override {
-      out << (q ? "{" : "(");
-      for (::std::size_t i = 0; i < args.size(); ++i) {
-        if (i) {
-          out << " ";
-        }
-        args[i]->print(out);
-      }
-      out << (q ? "}" : ")");
-    }
-
-    virtual poly_base copy() const noexcept override {
-      auto other = new expression{start, q};
-      other->args.reserve(args.size());
-      for (auto&& arg : args) {
-        other->args.push_back(arg->copy());
-      }
-      return poly_base{other};
-    }
+  struct parse_unit {
+    ::std::size_t pos;
+    expression expr;
   };
 
   struct error_info {
-    ::std::string error_message;
+    ::std::string const error_message;
     ::std::size_t const column;
   };
 
-  using parse_result = either<error_info, poly_base>;
+  using parse_result = either<error_info, parse_unit>;
 
   parse_result parse(char const* line) noexcept;
+
+  ::std::ostream& operator<<(::std::ostream& out, expression const&) noexcept;
 
 }

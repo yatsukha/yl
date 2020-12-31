@@ -1,5 +1,7 @@
 #include "yl/util.hpp"
 #include <iostream>
+#include <stdexcept>
+#include <variant>
 #include <yl/either.hpp>
 #include <bits/c++config.h>
 #include <cctype>
@@ -38,7 +40,13 @@ namespace yl {
       ++curr;
     }
 
-    return succeed(poly_base{new terminal{start, ::std::string(line + start, line + curr)}});
+    symbol s(line + start, line + curr);
+
+    try {
+      return succeed(parse_unit{start, ::std::stod(s)});
+    } catch (::std::invalid_argument const&) {}
+
+    return succeed(parse_unit{start, s});
   }
 
   parse_result parse_expression(char const* line, prf curr,
@@ -48,7 +56,9 @@ namespace yl {
       return fail(error_info{"Expression expected.", curr});
     }
 
-    auto expr = ::std::make_shared<expression>(curr);
+    auto list = ls{};
+    auto expr = parse_unit{curr};
+
     auto const static left_paren = [](auto&& c) {
       return c == '(' || c == '{';
     };
@@ -61,7 +71,7 @@ namespace yl {
         auto const old = curr;
 
         if (auto res = parse_terminal(line, curr); res) {
-          expr->args.emplace_back(res.value());
+          list.children.emplace_back(res.value());
           skip(line, curr);
           continue;
         }
@@ -73,8 +83,9 @@ namespace yl {
       auto closing = q ? '}' : ')';
 
       if (auto res = parse_expression(line, ++curr, closing); res) {
-        expr->args.emplace_back(res.value());
-        dynamic_cast<expression*>(expr->args.back().get())->q = q;
+        auto value = res.value();
+        ::std::get<ls>(value.expr).q = q;
+        list.children.push_back(value);
       } else {
         return res;
       }
@@ -96,11 +107,13 @@ namespace yl {
         return fail(error_info{"Expected closing parenthesis.", curr});
       }
     }
+
+    expr.expr = list;
     
-    return succeed(poly_base{expr});
+    return succeed(expr);
   }
 
-  either<error_info, poly_base> parse(char const* line) noexcept {
+  parse_result parse(char const* line) noexcept {
     pos p = 0;
     auto ret = parse_expression(line, p, false);
     if (!ret) {
@@ -110,6 +123,26 @@ namespace yl {
       return fail(error_info{"Unmatched parenthesis.", p});
     }
     return ret;
+  }
+
+
+  ::std::ostream& operator<<(::std::ostream& out, expression const& e) noexcept {
+    ::std::visit(overloaded {
+      [&out](numeric any) { out << any; },
+      [&out](symbol any) { out << any; },
+      [&out](ls list) {
+        out << (list.q ? "{" : "(");
+        for (::std::size_t i = 0; i < list.children.size(); ++i) {
+          if (i) {
+            out << " ";
+          }
+          out << list.children[i].expr;
+        }
+        out << (list.q ? "}" : ")");
+      }
+    }, e);
+
+    return out;
   }
 
 }

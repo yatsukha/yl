@@ -9,8 +9,9 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 
+#include <variant>
 #include <yl/parse.hpp>
-#include <yl/eval.hpp>
+// #include <yl/eval.hpp>
 
 int main(int const argc, char const* const* argv) {
 
@@ -38,20 +39,7 @@ int main(int const argc, char const* const* argv) {
     }
 
     if (auto expr = ::yl::parse(input.get()); expr) {
-      auto tree = expr.value();
-
-      if (auto res = ::yl::eval(tree); res) {
-        if (auto rr = res.value(); rr) {
-          if (print_tree) {
-            expr.value()->print(::std::cout); ::std::cout << "\n";
-          }
-          ::std::cout << "Result: " << rr.value();
-        } else {
-          rr.error()->print(::std::cout);
-        }
-      } else {
-        print_error(input.get(), res.error());
-      }
+      ::std::cout << expr.value().expr;
     } else {
       print_error(input.get(), expr.error());
     }

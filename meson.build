@@ -5,7 +5,7 @@ executable(
   sources: [
     'src/main.cpp',
     'src/yl/parse.cpp',
-    'src/yl/eval.cpp',
+#    'src/yl/eval.cpp',
   ],
   include_directories: [
     'include'
