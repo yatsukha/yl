@@ -1,23 +1,24 @@
 #include <cstdlib>
 #include <cstring>
-#include <ios>
 #include <iostream>
 #include <limits>
 #include <string>
 #include <memory>
+#include <variant>
 
 #include <readline/readline.h>
 #include <readline/history.h>
 
-#include <variant>
 #include <yl/parse.hpp>
-// #include <yl/eval.hpp>
+#include <yl/either.hpp>
+#include <yl/eval.hpp>
+#include <yl/util.hpp>
 
 int main(int const argc, char const* const* argv) {
 
-  bool const print_tree = argc == 2 && !strcmp(argv[1], "-v");
-
   ::std::cout << "yatsukha's lisp" << "\n";
+
+  bool const verbose = argc == 2 && !strcmp(argv[1], "-v");
   
   auto const free_deleter = [](void* ptr) { ::free(ptr); };
   auto const print_error = [](auto&& line, auto&& err) {
@@ -39,7 +40,15 @@ int main(int const argc, char const* const* argv) {
     }
 
     if (auto expr = ::yl::parse(input.get()); expr) {
-      ::std::cout << expr.value().expr;
+      if (verbose) {
+        ::std::cout << expr.value().expr << "\n";
+      }
+
+      if (auto eexpr = ::yl::eval(expr.value()); eexpr) {
+        ::std::cout << eexpr.value().expr;
+      } else {
+        print_error(input.get(), eexpr.error());
+      }
     } else {
       print_error(input.get(), expr.error());
     }

@@ -5,6 +5,7 @@
 #include <string>
 #include <utility>
 #include <iostream>
+#include <variant>
 
 namespace yl {
   
@@ -32,5 +33,16 @@ namespace yl {
 
   template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };
   template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
+
+  template<typename V, typename T>
+  struct append;
+
+  template<typename... Args, typename T>
+  struct append<::std::variant<Args...>, T> {
+    using type = ::std::variant<Args..., T>;
+  };
+
+  template<typename V, typename T>
+  using append_t = typename append<V, T>::type;
 
 }

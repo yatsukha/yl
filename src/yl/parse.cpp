@@ -1,11 +1,11 @@
-#include "yl/util.hpp"
 #include <iostream>
 #include <stdexcept>
 #include <variant>
-#include <yl/either.hpp>
-#include <bits/c++config.h>
 #include <cctype>
 #include <memory>
+
+#include <yl/either.hpp>
+#include <yl/util.hpp>
 #include <yl/parse.hpp>
 
 namespace yl {
@@ -28,7 +28,7 @@ namespace yl {
     }
   }
 
-  parse_result parse_terminal(char const* line, prf curr) noexcept { 
+  result_type parse_terminal(char const* line, prf curr) noexcept { 
     auto const static is_paren = [](auto&& c) {
       return c == '(' || c == ')'
               || c == '{' || c == '}';
@@ -43,13 +43,13 @@ namespace yl {
     symbol s(line + start, line + curr);
 
     try {
-      return succeed(parse_unit{start, ::std::stod(s)});
+      return succeed(unit{start, ::std::stod(s)});
     } catch (::std::invalid_argument const&) {}
 
-    return succeed(parse_unit{start, s});
+    return succeed(unit{start, s});
   }
 
-  parse_result parse_expression(char const* line, prf curr,
+  result_type parse_expression(char const* line, prf curr,
                                 char const close_parenthesis = '\0') noexcept {
     skip(line, curr);
     if (is_eof(line, curr)) {
@@ -57,7 +57,7 @@ namespace yl {
     }
 
     auto list = ls{};
-    auto expr = parse_unit{curr};
+    auto expr = unit{curr};
 
     auto const static left_paren = [](auto&& c) {
       return c == '(' || c == '{';
@@ -113,7 +113,7 @@ namespace yl {
     return succeed(expr);
   }
 
-  parse_result parse(char const* line) noexcept {
+  result_type parse(char const* line) noexcept {
     pos p = 0;
     auto ret = parse_expression(line, p, false);
     if (!ret) {
@@ -126,23 +126,5 @@ namespace yl {
   }
 
 
-  ::std::ostream& operator<<(::std::ostream& out, expression const& e) noexcept {
-    ::std::visit(overloaded {
-      [&out](numeric any) { out << any; },
-      [&out](symbol any) { out << any; },
-      [&out](ls list) {
-        out << (list.q ? "{" : "(");
-        for (::std::size_t i = 0; i < list.children.size(); ++i) {
-          if (i) {
-            out << " ";
-          }
-          out << list.children[i].expr;
-        }
-        out << (list.q ? "}" : ")");
-      }
-    }, e);
-
-    return out;
-  }
 
 }

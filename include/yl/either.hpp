@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstring>
+#include <functional>
 #include <yl/util.hpp>
 #include <type_traits>
 #include <utility>
@@ -196,5 +197,30 @@ namespace yl {
     new (ret.data) EE{e};
     return ret;
   } 
+
+  template<
+    typename E, typename S, typename SS,
+    typename = ::std::enable_if_t<!::std::is_same_v<void, SS>>
+  >
+  inline either<E, SS> map(
+    either<E, S> const& e,
+    ::std::function<SS(S const&)> const& f
+  ) noexcept {
+    if (!e) {
+      return e;
+    }
+    return succeed(f(e.value()));
+  }
+
+  template<typename E, typename S1, typename S2>
+  inline either<E, ::std::pair<S1, S2>> aggregate(
+    either<E, S1> const& e1,
+    either<E, S2> const& e2
+  ) noexcept {
+    if (!e1) return fail(e1.error());
+    if (!e2) return fail(e2.error());
+
+    return {e1.value(), e2.value()};
+  }
 
 }

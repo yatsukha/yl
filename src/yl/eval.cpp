@@ -1,20 +1,14 @@
-#include "yl/either.hpp"
-#include "yl/parse.hpp"
-#include "yl/util.hpp"
-#include <bits/c++config.h>
-#include <stdexcept>
-#include <string>
-#include <functional>
+#include "yl/types.hpp"
 #include <unordered_map>
 #include <cmath>
+
+#include <variant>
 #include <yl/eval.hpp>
 
 namespace yl {
 
-  using operands = ::std::vector<poly_base>&;
-  using operation = ::std::function<eval_either(operands)>;
 
-  eval_either eval_s(poly_base&) noexcept;
+/*  eval_either eval_s(poly_base&) noexcept;
 
   namespace operations {
 
@@ -34,6 +28,29 @@ namespace yl {
     return either; \
   }
 
+#define RETURN_IF_NOT_NUMBER(variant, idx) \
+  if (!::std::holds_alternative<double>(variant)) { \
+    return fail(error_info{ \
+      "Expected a number.", \
+      idx \
+    }); \
+  }
+
+#define RETURN_IF_NOT_EXPR(either, idx) \
+  if (!::std::holds_alternative<poly_base>(either.value())) { \
+    return fail(error_info{ \
+      "Expected an expression.", \
+      idx \
+    }); \
+  } \
+  if (!dynamic_cast<expression const*>( \
+        ::std::get<poly_base>(either.value()))) { \
+    return fail(error_info{\
+      "Expected an expression.", \
+      idx \
+    }); \
+  }
+
 #define RETURN_ERROR_IF_Q(either) \
   if (either && !either.value()) {\
     return fail(error_info{ \
@@ -46,12 +63,12 @@ namespace yl {
 #define DEFINE_N_ARY_OPERATOR(name, operation) \
     eval_either name(operands args) noexcept { \
       RETURN_ERROR_IF_EMPTY(args); \
-      result_type::success_type running_total; \
+      double running_total; \
       for (::std::size_t i = 1; i < args.size(); ++i) { \
         auto evaluated = eval_s(args[i]); \
         RETURN_IF_ERROR(evaluated); \
-        RETURN_ERROR_IF_Q(evaluated); \
-        auto const value = evaluated.value().value(); \
+        RETURN_IF_NOT_NUMBER(evaluated.value(), args[i]->start); \
+        auto const value = ::std::get<double>(evaluated.value()); \
         if (i == 1) { \
           running_total = value; \
         } else { \
@@ -261,6 +278,192 @@ namespace yl {
 
   eval_either eval(poly_base& expr) noexcept {
     return eval_s(expr);
+  } */
+
+  /*
+   *
+   * BUILTIN OPERATIONS
+   *
+   */
+
+  either<error_info, numeric> numeric_or_error(unit u) noexcept {
+    auto ret = eval(u);
+
+    if (!ret) {
+      return fail(ret.error());
+    }
+
+    u = ret.value();
+
+    auto const& [idx, expr] = u;
+    
+    if (::std::holds_alternative<numeric>(expr)) {
+      return succeed(::std::get<numeric>(expr));
+    }
+
+    return fail(error_info{
+      "Expected a numeric value, or a variable that refers to a numeric value.",
+      idx
+    });
+  }
+
+#define ARITHMETIC_OPERATOR(name, operation) \
+  result_type name(unit operand) noexcept { \
+    auto idx = operand.pos; \
+    auto const& args = ::std::get<ls>(operand.expr).children; \
+    if (args.size() < 2) { \
+      return fail(error_info{ \
+        "Expecting at least one argument.", \
+        idx \
+      }); \
+    } \
+    numeric result = 0.0; \
+    for (::std::size_t idx = 1; idx < args.size(); ++idx) { \
+      auto noe = numeric_or_error(args[idx]); \
+      if (!noe) { \
+        return noe; \
+      } \
+      result operation##= noe.value(); \
+    } \
+    return succeed(unit{idx, result}); \
+  }
+
+  ARITHMETIC_OPERATOR(add, +);
+  ARITHMETIC_OPERATOR(sub, -);
+  ARITHMETIC_OPERATOR(mul, *);
+  ARITHMETIC_OPERATOR(div, /);
+
+  result_type eval_m(unit operand) noexcept {
+    auto idx = operand.pos;
+    auto const& args = ::std::get<ls>(operand.expr).children;
+
+    if (args.size() != 2) {
+      return fail(error_info{
+        "Eval expects a single argument.",
+        idx
+      });
+    }
+
+    auto const& arg = args[1];
+
+    if (!::std::holds_alternative<ls>(arg.expr)) {
+      return fail(error_info{
+        "Eval expects a list type expression.",
+        arg.pos
+      });
+    }
+
+    auto const& list = ::std::get<ls>(arg.expr);
+
+    if (!list.q) {
+      auto maybe_q = eval(arg);
+      if (!maybe_q) {
+        return maybe_q;
+      }
+
+      if (!::std::holds_alternative<ls>(maybe_q.value().expr)
+          || !::std::get<ls>(maybe_q.value().expr).q) {
+        return fail(error_info{
+          "Given expression does not yield a Q expression.",
+          arg.pos
+        });
+      }
+
+      return eval(maybe_q.value(), true); 
+    }
+
+    return eval(arg, true);
+  }
+
+  /*
+   *
+   * EVAL FUNCTIONS
+   *
+   */
+
+  resolve_symbol_result resolve_symbol(unit const& pu) noexcept {
+    if (!::std::holds_alternative<symbol>(pu.expr)) {
+      return fail(error_info{
+        "Expected a symbol.",
+        pu.pos
+      });
+    }
+
+    auto const& s = ::std::get<symbol>(pu.expr);
+
+    ::std::unordered_map<symbol, expression> static env{
+      {"+", function{"Adds numbers.", add}},
+      {"-", function{"Subtracts numbers.", sub}},
+      {"*", function{"Multiplies numbers.", mul}},
+      {"/", function{"Divides numbers.", div}},
+      {"eval", function{"Evaluates a Q expression.", eval_m}},
+    };
+
+    if (env.count(s)) {
+      return succeed(unit{pu.pos, resolved_symbol{env[s]}});
+    }
+
+    return fail(error_info{
+      concat("Symbol ", s, " is undefined."),
+      pu.pos 
+    });
+  }
+
+  result_type eval(unit const& pu, bool const eval_q) noexcept {
+    if (::std::holds_alternative<numeric>(pu.expr)) {
+      return succeed(pu);
+    }
+
+    if (::std::holds_alternative<symbol>(pu.expr)) {
+      if (auto rsr = resolve_symbol(pu); rsr) {
+        return succeed(rsr.value());
+      } else {
+        return fail(rsr.error());
+      }
+    }
+
+    if (::std::holds_alternative<ls>(pu.expr)) {
+      auto const& list = ::std::get<ls>(pu.expr);
+
+      if (!eval_q && list.q) {
+        return fail(error_info{
+          "Expected an S expression in this context.",
+          pu.pos
+        });
+      }
+
+      if (list.children.empty()) {
+        return fail(error_info{
+          "Expected a non-empty expression.",
+          pu.pos
+        });
+      }
+
+      // ??
+      if (list.children.size() == 1) {
+        return eval(list.children.front());
+      }
+
+      auto either_operator = eval(list.children.front());
+
+      if (!either_operator) {
+        return either_operator;
+      }
+
+      auto const& maybe_operator = either_operator.value();
+
+      if (!::std::holds_alternative<function>(maybe_operator.expr)) {
+        return fail(error_info{
+          "Expected a builtin or user defined function.",
+          maybe_operator.pos
+        });
+      }
+
+      return ::std::get<function>(maybe_operator.expr).func(pu);
+    }
+
+    terminate_with("Missing a type check in eval.");
+    __builtin_unreachable();
   }
 
 }
