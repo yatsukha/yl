@@ -15,15 +15,17 @@
 #include <yl/util.hpp>
 
 int main(int const argc, char const* const* argv) {
-
   ::std::cout << "yatsukha's lisp" << "\n";
+  ::std::cout << "^C to exit" << "\n";
+
+  char const* prompt = "yl> ";
 
   bool const verbose = argc == 2 && !strcmp(argv[1], "-v");
   
   auto const free_deleter = [](void* ptr) { ::free(ptr); };
-  auto const print_error = [](auto&& line, auto&& err) {
-    ::std::cout << line << "\n";
-    for (::std::size_t i = 0; i < err.column; ++i) {
+  auto const print_error = 
+  [offset = ::std::strlen(prompt)](auto&& err) {
+    for (::std::size_t i = 0; i < err.column + offset; ++i) {
       ::std::cout << " ";
     }
     ::std::cout << "^" << "\n";
@@ -32,7 +34,7 @@ int main(int const argc, char const* const* argv) {
 
   while (true) {
     ::std::unique_ptr<char[], decltype(free_deleter)> const input{
-      ::readline("yl> "), free_deleter
+      ::readline(prompt), free_deleter
     };
 
     if (!input[0]) {
@@ -47,10 +49,10 @@ int main(int const argc, char const* const* argv) {
       if (auto eexpr = ::yl::eval(expr.value()); eexpr) {
         ::std::cout << eexpr.value().expr;
       } else {
-        print_error(input.get(), eexpr.error());
+        print_error(eexpr.error());
       }
     } else {
-      print_error(input.get(), expr.error());
+      print_error(expr.error());
     }
 
     ::std::cout << "\n";
@@ -58,5 +60,4 @@ int main(int const argc, char const* const* argv) {
   }
 
   ::rl_clear_history();
-
 }
