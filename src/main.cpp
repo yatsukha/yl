@@ -66,7 +66,7 @@ namespace yl {
 
 int main(int const argc, char const* const* argv) {
   ::std::cout << "yatsukha's lisp" << "\n";
-  ::std::cout << "^C to exit" << "\n";
+  ::std::cout << "^C to exit, 'help' to get started" << "\n";
 
   ::std::string predef_name = ".predef.yl";
 

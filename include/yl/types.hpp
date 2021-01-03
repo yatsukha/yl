@@ -22,6 +22,7 @@ namespace yl {
   using expression = ::std::variant<numeric, symbol, list, function>;
 
   ::std::ostream& operator<<(::std::ostream& out, expression const&) noexcept;
+  ::std::string type_of(expression const&) noexcept;
 
   using environment = ::std::unordered_map<symbol, expression>;
   using env_ptr     = ::std::shared_ptr<environment>;

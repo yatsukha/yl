@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <debug/assertions.h>
 #include <memory>
+#include <sstream>
 #include <unordered_map>
 #include <cmath>
 
@@ -359,6 +360,68 @@ namespace yl {
       }
     });
   }
+
+  // .. abuse :^)
+  result_type help_m(unit u, env_node_ptr env) noexcept {
+    auto const& args = ::std::get<list>(u.expr).children;
+    
+    ASSERT_ARG_COUNT(args, u.pos, <= 1);
+
+    symbol s{"\n"};
+
+    if (args.size() == 1) {
+      s +=
+        "  Hi, welcome to yatsukha's lisp. This is a lisp like intepreted language.\n"
+        "  There are only 4 types: numeric, symbol, function and list.\n"
+        "  Numeric type is a floating point number such as 1, or 1.25.\n"
+        "  Symbol is any named value such as 'a' or 'help'.\n"
+        "  List is list of types. It can be evaluated such as '(+ 1 2)'\n"
+        "  or unevaluated such as '{+ 1 2}' which can be evaluated using 'eval'.\n"
+        "  Function is a resolved symbol that represents a computation,\n"
+        "  it can be created using '\\', see 'help \\'.\n"
+        "  Functions support partial evaluation.\n"
+        "\n"
+        "  Examples: \n"
+        "  (+ 1 2)\n"
+        "  eval {+ 1 2}\n"
+        "  def {mySymbol} 2\n"
+        "  + mySmbol 4\n"
+        "  (\\{x y} {+ x y}) 2 4\n"
+        "\n"
+        "  Enter 'help symbol' to get information about a symbol.\n"
+        "  Symbols currently available for inspection:\n";
+      for (auto&& sym : *env->curr) {
+        s += "    ";
+        s += sym.first;
+        s += "\n";
+      }
+
+      return succeed(unit{u.pos, list{true, {unit{u.pos, s}}}});
+    }
+
+    expression expr;
+
+    if (is_symbol(args[1].expr)) {
+      auto resolved = resolve_symbol({args[1].pos, args[1].expr}, env); 
+      RETURN_IF_ERROR(resolved);
+
+      expr = (*env->curr)[::std::get<symbol>(resolved.value().expr)];
+    } else {
+      expr = args[1].expr;
+    }
+
+    s += "  type: ";
+    s += type_of(expr);
+    s += "\n";
+
+    s += "  value: ";
+
+    ::std::stringstream ss;
+    ss << expr << "\n";
+    s += ss.str();
+    
+    return succeed(unit{u.pos, list{true, {unit{u.pos, s}}}});
+  }
    
   env_node_ptr global_environment() noexcept {
     auto static g_env = ::std::make_shared<environment>(environment{
@@ -386,6 +449,7 @@ namespace yl {
         "Result: 5",
         lambda_m
       }},
+      {"help", function{"Outputs information about a symbol.", help_m}},
     });
 
     return ::std::make_shared<env_node>(env_node{
@@ -393,8 +457,6 @@ namespace yl {
       .prev = {}
     });
   }
-
-
 
   /*
    *

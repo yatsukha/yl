@@ -19,6 +19,16 @@ namespace yl {
     }, e);
     return out;
   }
-
+  
+  ::std::string type_of(expression const& e) noexcept {
+    ::std::string s;
+    ::std::visit(overloaded {
+      [&s](numeric) { s = "numeric"; },
+      [&s](symbol) { s = "symbol"; },
+      [&s](function) { s = "function"; },
+      [&](list) { s = "list"; },
+    }, e);
+    return s;
+  }
 
 }
