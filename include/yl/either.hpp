@@ -220,7 +220,17 @@ namespace yl {
     if (!e1) return fail(e1.error());
     if (!e2) return fail(e2.error());
 
-    return {e1.value(), e2.value()};
+    return succeed(::std::pair<S1, S2>{e1.value(), e2.value()});
+  }
+
+  template<typename E, typename S>
+  inline either<E, S> any(
+    either<E, S> const& u,
+    either<E, S> const& v
+    ) noexcept {
+    if (u) return u;
+    if (v) return v;
+    return fail(u.error());
   }
 
 }

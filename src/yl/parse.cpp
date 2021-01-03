@@ -28,7 +28,8 @@ namespace yl {
     }
   }
 
-  result_type parse_terminal(char const* line, prf curr) noexcept { 
+  result_type parse_terminal(
+      char const* line, ::std::size_t const line_num, prf curr) noexcept { 
     auto const static is_paren = [](auto&& c) {
       return c == '(' || c == ')'
               || c == '{' || c == '}';
@@ -43,21 +44,22 @@ namespace yl {
     symbol s(line + start, line + curr);
 
     try {
-      return succeed(unit{start, ::std::stod(s)});
+      return succeed(unit{{line_num, start}, ::std::stod(s)});
     } catch (::std::invalid_argument const&) {}
 
-    return succeed(unit{start, s});
+    return succeed(unit{{line_num, start}, s});
   }
 
-  result_type parse_expression(char const* line, prf curr,
-                                char const close_parenthesis = '\0') noexcept {
+  result_type parse_expression(
+      char const* line, ::std::size_t const line_num, prf curr,
+      char const close_parenthesis = '\0') noexcept {
     skip(line, curr);
     if (is_eof(line, curr)) {
-      return fail(error_info{"Expression expected.", curr});
+      return fail(error_info{"Expression expected.", {line_num, curr}});
     }
 
-    auto list = ls{};
-    auto expr = unit{curr};
+    auto ls = list{};
+    auto expr = unit{{line_num, curr}};
 
     auto const static left_paren = [](auto&& c) {
       return c == '(' || c == '{';
@@ -70,8 +72,8 @@ namespace yl {
       if (!left_paren(line[curr])) {
         auto const old = curr;
 
-        if (auto res = parse_terminal(line, curr); res) {
-          list.children.emplace_back(res.value());
+        if (auto res = parse_terminal(line, line_num, curr); res) {
+          ls.children.emplace_back(res.value());
           skip(line, curr);
           continue;
         }
@@ -82,10 +84,10 @@ namespace yl {
       bool const q = line[curr] == '{';
       auto closing = q ? '}' : ')';
 
-      if (auto res = parse_expression(line, ++curr, closing); res) {
+      if (auto res = parse_expression(line, line_num, ++curr, closing); res) {
         auto value = res.value();
-        ::std::get<ls>(value.expr).q = q;
-        list.children.push_back(value);
+        ::std::get<list>(value.expr).q = q;
+        ls.children.push_back(value);
       } else {
         return res;
       }
@@ -99,28 +101,28 @@ namespace yl {
           return fail(error_info{
             concat("Differing parentesis, expected ", close_parenthesis, " got ",
                    line[curr], "."),
-            curr
+            {line_num, curr}
           });
         }
         ++curr;
       } else {
-        return fail(error_info{"Expected closing parenthesis.", curr});
+        return fail(error_info{"Expected closing parenthesis.", {line_num, curr}});
       }
     }
 
-    expr.expr = list;
+    expr.expr = ls;
     
     return succeed(expr);
   }
 
-  result_type parse(char const* line) noexcept {
+  result_type parse(char const* line, ::std::size_t const line_num) noexcept {
     pos p = 0;
-    auto ret = parse_expression(line, p, false);
+    auto ret = parse_expression(line, line_num, p, false);
     if (!ret) {
       return ret;
     }
     if (line[p] == ')' || line[p] == '}') {
-      return fail(error_info{"Unmatched parenthesis.", p});
+      return fail(error_info{"Unmatched parenthesis.", {line_num, p}});
     }
     return ret;
   }

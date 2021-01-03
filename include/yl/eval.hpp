@@ -12,12 +12,12 @@
 
 namespace yl {
 
-  using resolved_symbol       = expression;
-  using resolve_symbol_result = result_type;
+  result_type resolve_symbol(unit const& pu, env_node_ptr node) noexcept;
 
-  // TODO: add functional state using a struct
-  resolve_symbol_result resolve_symbol(unit const& pu) noexcept;
-
-  result_type eval(unit const& pu, bool const eval_q = false) noexcept;
+  result_type eval(
+    unit const& pu, 
+    env_node_ptr node = global_environment(), 
+    bool const eval_q = false
+  ) noexcept;
   
 }

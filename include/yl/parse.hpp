@@ -10,6 +10,6 @@
 
 namespace yl {
 
-  result_type parse(char const* line) noexcept;
+  result_type parse(char const* line, ::std::size_t const line_num) noexcept;
 
 }

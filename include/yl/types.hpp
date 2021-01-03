@@ -2,7 +2,9 @@
 
 #include <string>
 #include <functional>
+#include <unordered_map>
 #include <variant>
+#include <memory>
 
 #include <yl/either.hpp>
 
@@ -10,19 +12,40 @@ namespace yl {
 
   // base types
 
-  struct ls;
+  struct list;
   struct function;
 
   using numeric = double;
   using symbol  = ::std::string;
 
-  using expression = ::std::variant<numeric, symbol, ls, function>;
+  using expression = ::std::variant<numeric, symbol, list, function>;
+
+  ::std::ostream& operator<<(::std::ostream& out, expression const&) noexcept;
+
+  using environment = ::std::unordered_map<symbol, expression>;
+  using env_ptr     = ::std::shared_ptr<environment>;
+
+  struct env_node;
+
+  using env_node_ptr = ::std::shared_ptr<env_node>;
+
+  struct env_node {
+    env_ptr curr;
+    env_node_ptr prev;
+  };
+
+  env_node_ptr global_environment() noexcept;
 
   // helpers
   
+  struct position {
+    ::std::size_t line;
+    ::std::size_t column;
+  };
+  
   struct error_info {
     ::std::string const error_message;
-    ::std::size_t const column;
+    position const pos;
   };
 
   struct unit;
@@ -31,23 +54,20 @@ namespace yl {
 
   //
 
-  struct ls {
+  struct list {
     bool q = false;
     ::std::vector<unit> children;
   };
 
-
-
   struct function {
+    using type = ::std::function<result_type(unit, env_node_ptr)>;
     ::std::string description;
-    ::std::function<result_type(unit)> func;
+    type func;
   };
 
   struct unit {
-    ::std::size_t pos;
+    position pos;
     expression expr;
   };
-
-  ::std::ostream& operator<<(::std::ostream& out, expression const&) noexcept;
 
 }

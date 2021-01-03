@@ -7,14 +7,14 @@ namespace yl {
       [&out](numeric any) { out << any; },
       [&out](symbol any) { out << any; },
       [&out](function fn) { out << "<fn>: " << fn.description; },
-      [&out](ls list) {
-        out << (list.q ? "{" : "(");
-        for (::std::size_t i = 0; i < list.children.size(); ++i) {
+      [&out](list ls) {
+        out << (ls.q ? "{" : "(");
+        for (::std::size_t i = 0; i < ls.children.size(); ++i) {
           if (i)
             out << " ";
-          out << list.children[i].expr;
+          out << ls.children[i].expr;
         }
-        out << (list.q ? "}" : ")");
+        out << (ls.q ? "}" : ")");
       }
     }, e);
     return out;
