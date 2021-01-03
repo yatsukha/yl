@@ -1,6 +1,7 @@
 #include "yl/either.hpp"
 #include "yl/types.hpp"
 #include <cstdlib>
+#include <debug/assertions.h>
 #include <memory>
 #include <unordered_map>
 #include <cmath>
@@ -10,6 +11,41 @@
 
 namespace yl {
 
+#define FAIL_WITH(msg, pos) \
+  return fail(error_info{ \
+    msg, \
+    pos \
+  });
+
+#define RETURN_IF_ERROR(either) \
+  if (!either) { \
+    return fail(either.error()); \
+  }
+
+#define ASSERT_ARG_COUNT(args, pos, eq) \
+  if (!(args.size() - 1 eq)) { \
+    FAIL_WITH("Argument count must be " #eq ".", pos) \
+  }
+
+#define DEF_TYPE_CHECK(type) \
+  bool is_##type(expression const& expr) noexcept { \
+    return ::std::holds_alternative<type>(expr); \
+  }
+
+  DEF_TYPE_CHECK(numeric);
+  DEF_TYPE_CHECK(symbol);
+  DEF_TYPE_CHECK(function);
+  DEF_TYPE_CHECK(list);
+
+#define Q_OR_ERROR(unit) \
+  if (!is_list(unit.expr) \
+      || !::std::get<list>(unit.expr).q) {\
+    return fail(error_info{ \
+      "Expected a Q expression.", \
+       unit.pos \
+    });  \
+  }
+
   /*
    *
    * BUILTIN OPERATIONS
@@ -17,46 +53,24 @@ namespace yl {
    */
 
   either<error_info, numeric> numeric_or_error(unit u, env_node_ptr node) noexcept {
-    auto ret = eval(u, node);
-
-    if (!ret) {
-      return fail(ret.error());
+    if (is_numeric(u.expr)) {
+      return succeed(::std::get<numeric>(u.expr));
     }
 
-    u = ret.value();
-
-    auto const& [idx, expr] = u;
-    
-    if (::std::holds_alternative<numeric>(expr)) {
-      return succeed(::std::get<numeric>(expr));
-    }
-
-    return fail(error_info{
-      "Expected a numeric value, or a variable that refers to a numeric value.",
-      idx
-    });
+    FAIL_WITH("Expected a numeric value.", u.pos);
   }
 
 #define ARITHMETIC_OPERATOR(name, operation) \
   result_type name(unit operand, env_node_ptr node) noexcept { \
     auto idx = operand.pos; \
     auto const& args = ::std::get<list>(operand.expr).children; \
-    if (args.size() < 2) { \
-      return fail(error_info{ \
-        "Expecting at least one argument.", \
-        idx \
-      }); \
-    } \
+    ASSERT_ARG_COUNT(args, idx, >= 1); \
     auto first = numeric_or_error(args[1], node); \
-    if (!first) { \
-      return first; \
-    } \
+    RETURN_IF_ERROR(first); \
     numeric result = first.value(); \
     for (::std::size_t idx = 2; idx < args.size(); ++idx) { \
       auto noe = numeric_or_error(args[idx], node); \
-      if (!noe) { \
-        return noe; \
-      } \
+      RETURN_IF_ERROR(noe); \
       result operation##= noe.value(); \
     } \
     return succeed(unit{idx, result}); \
@@ -68,140 +82,59 @@ namespace yl {
   ARITHMETIC_OPERATOR(div, /);
 
   result_type eval_m(unit operand, env_node_ptr node) noexcept {
-    auto idx = operand.pos;
     auto const& args = ::std::get<list>(operand.expr).children;
 
-    if (args.size() != 2) {
-      return fail(error_info{
-        "Eval expects a single argument.",
-        idx
-      });
-    }
+    ASSERT_ARG_COUNT(args, operand.pos, == 1);
+    Q_OR_ERROR(args[1]);
 
-    auto evaluated = eval(args[1], node);
-
-    if (!evaluated) {
-      return evaluated;
-    }
-
-    auto arg = evaluated.value();
-
-    if (!::std::holds_alternative<list>(arg.expr)) {
-      return fail(error_info{
-        "Eval expects a list type expression.",
-        arg.pos
-      });
-    }
-
-    auto const& ls = ::std::get<list>(arg.expr);
-
-    if (!ls.q) { 
-      return fail(error_info{
-        "Eval expects a Q expression.",
-        arg.pos
-      });
-    }
-
-    return eval(arg, node, true);
+    return eval(args[1], node, true);
   }
 
   result_type list_m(unit operand, env_node_ptr node) noexcept {
-    auto idx = operand.pos;
     auto const& args = ::std::get<list>(operand.expr).children;
 
-    if (args.size() < 2) {
-      return fail(error_info{
-        "List expects at least one argument.",
-        idx
-      });
-    }
+    ASSERT_ARG_COUNT(args, operand.pos, >= 1);
 
-    auto q_expr = list{.q = true};
-    q_expr.children.reserve(args.size() - 1);
-    for (::std::size_t i = 1; i < args.size(); ++i) {
-      auto nc = eval(args[i], node);
-      if (!nc) {
-        return nc;
+    return succeed(unit{
+      operand.pos, 
+      list{
+        .q = true, 
+        .children = {args.begin() + 1, args.end()}
       }
-      q_expr.children.push_back(nc.value());
-    }
-
-    return succeed(unit{operand.pos, q_expr});
+    });
   }
 
   result_type head_m(unit operand, env_node_ptr node) noexcept {
-    auto idx = operand.pos;
     auto const& args = ::std::get<list>(operand.expr).children;
 
-    if (args.size() != 2) {
-      return fail(error_info{
-        "Head expects one argument.",
-        idx
-      });
+    ASSERT_ARG_COUNT(args, operand.pos, == 1);
+
+    if (!is_list(args[1].expr) || !::std::get<list>(args[1].expr).q){
+      FAIL_WITH("Head expects a Q expression as an argument.", args[1].pos);
     }
 
-    auto evaluated = eval(args[1], node);
+    auto const& ls = ::std::get<list>(args[1].expr);
 
-    if (!evaluated) {
-      return evaluated;
-    }
-
-    auto arg = evaluated.value();
-
-    if (!::std::holds_alternative<list>(arg.expr)
-        || !::std::get<list>(arg.expr).q){
-      return fail(error_info{
-        "Head expects a Q expression as an argument.",
-        arg.pos
-      });
-    }
-
-    auto const& other = ::std::get<list>(arg.expr);
-
-    if (other.children.empty()) {
-      return fail(error_info{
-        "Head takes a non-empty Q expression.",
-        arg.pos
-      });
+    if (ls.children.empty()) {
+      FAIL_WITH("Head takes a non-empty Q expression.", args[1].pos);
     }
 
     return succeed(unit{
-      other.children.front().pos, 
-      list{true, {other.children.front()}}
+      ls.children.front().pos, 
+      list{true, {ls.children.front()}}
     });
   }
 
   result_type tail_m(unit operand, env_node_ptr node) noexcept {
-    auto idx = operand.pos;
     auto const& args = ::std::get<list>(operand.expr).children;
 
-    if (args.size() != 2) {
-      return fail(error_info{
-        "Tail expects one argument.",
-        idx
-      });
-    }
+    ASSERT_ARG_COUNT(args, operand.pos, == 1);
+    Q_OR_ERROR(args[1]);
 
-    auto evaluated = eval(args[1], node);
-
-    if (!evaluated) {
-      return evaluated;
-    }
-
-    auto arg = evaluated.value();
-
-    if (!::std::holds_alternative<list>(arg.expr)
-        || !::std::get<list>(arg.expr).q){
-      return fail(error_info{
-        "Tail expects a Q expression as an argument.",
-        arg.pos
-      });
-    }
-
-    auto const& other = ::std::get<list>(arg.expr);
+    auto const& other = ::std::get<list>(args[1].expr);
 
     return succeed(unit{
-      arg.pos, 
+      args[1].pos, 
       list{true, {
         other.children.begin() + 1, 
         other.children.empty() ? other.children.begin() + 1 : other.children.end()
@@ -210,223 +143,91 @@ namespace yl {
   }
 
   result_type join_m(unit operand, env_node_ptr node) noexcept {
-    auto idx = operand.pos;
     auto const& args = ::std::get<list>(operand.expr).children;
 
-    if (args.size() < 2) {
-      return fail(error_info{
-        "Join expects at least one Q expression as an argument.",
-        idx
-      });
-    }
+    ASSERT_ARG_COUNT(args, operand.pos, >= 1);
 
     list ret{true};
 
     for (::std::size_t i = 1; i < args.size(); ++i) {
-      auto evaluated = eval(args[i], node);
+      Q_OR_ERROR(args[i]);
 
-      if (!evaluated) {
-        return evaluated;
-      }
-
-      auto arg = evaluated.value();
-
-      if (!::std::holds_alternative<list>(arg.expr)
-          || !::std::get<list>(arg.expr).q){
-        return fail(error_info{
-          "Join expects a Q expression as an argument.",
-          arg.pos
-        });
-      }
-
-      auto const& other = ::std::get<list>(arg.expr);
-      for (auto&& child : other.children) {
-        ret.children.push_back(child);
-      }
+      auto const& other = ::std::get<list>(args[i].expr);
+      ret.children.insert(
+        ret.children.end(), other.children.begin(), other.children.end());
     }
 
-    return succeed(unit{idx, ret});
+    return succeed(unit{operand.pos, ret});
   }
 
   result_type cons_m(unit operand, env_node_ptr node) noexcept {
-    auto idx = operand.pos;
     auto const& args = ::std::get<list>(operand.expr).children;
 
-    if (args.size() != 3) {
-      return fail(error_info{
-        "Cons expects two arguments, any expression and a Q expression.",
-        idx
-      });
-    }
+    ASSERT_ARG_COUNT(args, operand.pos, == 2);
 
-    auto evaluated = eval(args[2], node);
+    Q_OR_ERROR(args[2]);
 
-    if (!evaluated) {
-      return evaluated;
-    }
+    auto other = ::std::get<list>(args[2].expr);
+    other.children.insert(other.children.begin(), args[1]);
 
-    auto arg = evaluated.value();
-
-    if (!::std::holds_alternative<list>(arg.expr)
-        || !::std::get<list>(arg.expr).q){
-      return fail(error_info{
-        "Cons' second argument must be a Q expression.",
-        arg.pos
-      });
-    }
-
-    auto const& other = ::std::get<list>(arg.expr);
-
-    list ret{true, {args[1]}};
-    ret.children.insert(
-        ret.children.end(), other.children.begin(), other.children.end());
-
-    return succeed(unit{idx, ret});
+    return succeed(unit{operand.pos, other});
   }
 
   result_type len_m(unit operand, env_node_ptr node) noexcept {
-    auto idx = operand.pos;
     auto const& args = ::std::get<list>(operand.expr).children;
 
-    if (args.size() != 2) {
-      return fail(error_info{
-        "Len expects a Q expression.",
-        idx
-      });
-    }
+    ASSERT_ARG_COUNT(args, operand.pos, == 1);
+    Q_OR_ERROR(args[1]);
 
-    auto evaluated = eval(args[1], node);
-
-    if (!evaluated) {
-      return evaluated;
-    }
-
-    auto arg = evaluated.value();
-
-    if (!::std::holds_alternative<list>(arg.expr)
-        || !::std::get<list>(arg.expr).q){
-      return fail(error_info{
-        "Len expects a Q expression.",
-        arg.pos
-      });
-    }
-
-    auto const& other = ::std::get<list>(arg.expr);
-
-    return succeed(unit{idx, numeric(other.children.size())});
+    return succeed(unit{
+      operand.pos, 
+      numeric(::std::get<list>(args[1].expr).children.size())
+    });
   }
 
   result_type init_m(unit operand, env_node_ptr node) noexcept {
-    auto idx = operand.pos;
     auto const& args = ::std::get<list>(operand.expr).children;
 
-    if (args.size() != 2) {
-      return fail(error_info{
-        "Init expects one argument.",
-        idx
-      });
-    }
+    ASSERT_ARG_COUNT(args, operand.pos, == 1);
+    Q_OR_ERROR(args[1]);
 
-    auto evaluated = eval(args[1], node);
-
-    if (!evaluated) {
-      return evaluated;
-    }
-
-    auto arg = evaluated.value();
-
-    if (!::std::holds_alternative<list>(arg.expr)
-        || !::std::get<list>(arg.expr).q){
-      return fail(error_info{
-        "Init expects a Q expression as an argument.",
-        arg.pos
-      });
-    }
-
-    auto const& other = ::std::get<list>(arg.expr);
+    auto const& other = ::std::get<list>(args[1].expr);
 
     return succeed(unit{
-      arg.pos, 
+      args[1].pos, 
       list{true, {
         other.children.begin(), 
         other.children.empty() ? other.children.begin() : other.children.end() - 1
       }}
     });
   }
-
-  // ?TODO: symbol or eval in arg list
  
   result_type def_m(unit u, env_node_ptr node) noexcept {
-    auto const& ls = ::std::get<list>(u.expr);
-    
-    if (ls.children.size() < 3) {
-      return fail(error_info{
-        "Def expects at least 2 arguments.,\n"
-        " - Q expression with variable names, or something that evaluates to Q expression,\n"
-        " - values/expressions/etc. to assign",
-        u.pos
-      });
-    }
+    auto const& args = ::std::get<list>(u.expr).children;
+  
+    ASSERT_ARG_COUNT(args, u.pos, >= 2);
+    Q_OR_ERROR(args[1]);
 
-    auto e_argl = eval(ls.children[1], node);
+    auto const& arguments = ::std::get<list>(args[1].expr).children;
 
-    if (!e_argl) {
-      return e_argl;
-    }
+    auto g_env = global_environment();
 
-    auto const& [idx, args] = e_argl.value();
-
-    if (!::std::holds_alternative<list>(args)
-        || !::std::get<list>(args).q) {
-      return fail(error_info{
-        "Expected a Q expression for the argument list.",
-        idx
-      });
-    }
-
-    auto const& arguments = ::std::get<list>(args);
-
-    auto g_env = node;
-
-    while (g_env->prev) {
-      g_env = g_env->prev;
-    }
-
-    if (arguments.children.size() != ls.children.size() - 2) {
-      return fail(error_info{
+    if (arguments.size() != args.size() - 2) {
+      FAIL_WITH(
         "Differing length of arguments and corresponding assignments.",
-        idx
-      });
+        u.pos
+      );
     }
 
-    for (::std::size_t i = 0; i < arguments.children.size(); ++i) {
-      if (!::std::holds_alternative<symbol>(arguments.children[i].expr)) {
-        return fail(error_info{
-          "Unexpected non-symbol in the argument list.",
-          arguments.children[i].pos
-        });
+    for (::std::size_t i = 0; i < arguments.size(); ++i) {
+      if (!is_symbol(arguments[i].expr)) {
+        FAIL_WITH("Unexpected non-symbol in the argument list.", arguments[i].pos);
       }
 
-      auto assignment = eval(ls.children[2 + i], node);
-      if (!assignment) {
-        return assignment;
-      }
-
-      (*g_env->curr)[::std::get<symbol>(arguments.children[i].expr)] = 
-        assignment.value().expr;
+      (*g_env->curr)[::std::get<symbol>(arguments[i].expr)] = args[2 + i].expr;
     }
 
     return succeed(unit{u.pos, list{}});
-  }
-
-// TODO: move further up and refactor
-#define Q_OR_ERROR(expr, idx) \
-  if (!::std::holds_alternative<list>(expr) \
-      || !::std::get<list>(expr).q) {\
-    return fail(error_info{ \
-      "Expected a Q expression.", \
-       idx \
-    });  \
   }
 
   function::type create_function(
@@ -436,61 +237,50 @@ namespace yl {
     env_ptr self_env = {}
   ) noexcept {
     return [=](unit u, env_node_ptr private_env) mutable -> result_type {
-      auto const& ls = ::std::get<list>(u.expr);
-      if (!variadic && arglist.children.size() < ls.children.size() - 1) {
-        return fail(error_info{
+      auto const& arguments = ::std::get<list>(u.expr).children;
+      if (!variadic && arglist.children.size() < arguments.size() - 1) {
+        FAIL_WITH(
           concat(
             "Excess arguments, expected ",
             arglist.children.size(),
             ", got ",
-            ls.children.size() - 1,
+            arguments.size() - 1,
             "."
           ),
           u.pos
-        });
+        );
       }
 
-      bool partial = !variadic && arglist.children.size() > ls.children.size() - 1;
+      bool partial = !variadic && arglist.children.size() > arguments.size() - 1;
 
+      // TODO: does it work without this?
+      // also evaluate the line above
       if (variadic 
-          && arglist.children.size() > ls.children.size() + 1 + !unused) {
-        return fail(error_info{
+          && arglist.children.size() > arguments.size() + !unused - 1) {
+        FAIL_WITH(
           "Not enough values to assign to non-variadic parameters.",
           u.pos
-        });
+        );
       }
 
-      if (!self_env) {
-        self_env = ::std::make_shared<environment>();
-      }
+      self_env = self_env ?: ::std::make_shared<environment>();
 
-      for (::std::size_t i = 0; i < ls.children.size() - 1; ++i) {
+      for (::std::size_t i = 0; 
+           i != (arglist.children.size() ? arguments.size() - 1 : 0); ++i) {
         auto sym = ::std::get<symbol>(arglist.children[i].expr);
         if (sym[0] == '&') {
           if (unused) {
             break;
           }
-
-          list q{.q = true};
-
-          for (::std::size_t j = i + 1; j < ls.children.size(); ++j) {     
-            auto evaluated = eval(ls.children[j], private_env);
-            if (!evaluated) {
-              return evaluated;
-            }
-            q.children.push_back(evaluated.value());
-          }
         
-          (*self_env)[::std::get<symbol>(arglist.children[i + 1].expr)] = q;
+          (*self_env)[::std::get<symbol>(arglist.children[i + 1].expr)] = list{
+            true, {arguments.begin() + i + 1, arguments.end()}
+          };
           break;
         }
 
-        auto evaluated = eval(ls.children[i + 1], private_env);
-        if (!evaluated) {
-          return evaluated;
-        }
         (*self_env)[::std::get<symbol>(arglist.children[i].expr)] = 
-          evaluated.value().expr;
+          arguments[i + 1].expr;
       }
 
       if (partial) {
@@ -502,7 +292,7 @@ namespace yl {
               {
                 .q = true,
                 .children = {
-                  arglist.children.begin() + ls.children.size() - 1,
+                  arglist.children.begin() + arguments.size() - 1,
                   arglist.children.end()
                 }
               },
@@ -514,63 +304,47 @@ namespace yl {
         }});
       }
 
-      env_node new_env{
-        .curr = self_env,
-        .prev = private_env
-      };
-
-      return eval(unit{body_pos, body}, ::std::make_shared<env_node>(new_env), true);
+      return eval(
+        unit{body_pos, body}, 
+        ::std::make_shared<env_node>(env_node{
+          .curr = self_env,
+          .prev = private_env
+        }), 
+        true
+      );
     };
   }
 
   result_type lambda_m(unit u, env_node_ptr node) noexcept {
-    auto const& ls = ::std::get<list>(u.expr);
+    auto const& args = ::std::get<list>(u.expr).children;
 
-    if (ls.children.size() != 3) {
-      return fail(error_info{
-        "Lambda expects two arguments.",
-        u.pos
-      });
-    }
+    ASSERT_ARG_COUNT(args, u.pos, == 2);
 
-    auto agg = aggregate(eval(ls.children[1], node), eval(ls.children[2], node));
+    Q_OR_ERROR(args[1]);
+    Q_OR_ERROR(args[2]);
 
-    if (!agg) {
-      return agg;
-    }
-
-    auto const& [v_arglist, v_body] = agg.value();
-
-    Q_OR_ERROR(v_arglist.expr, v_arglist.pos);
-    Q_OR_ERROR(v_body.expr, v_body.pos);
-
-    auto const arglist = ::std::get<list>(v_arglist.expr);
-    auto const body    = ::std::get<list>(v_body.expr);
+    auto const arglist = ::std::get<list>(args[1].expr);
 
     bool variadic = arglist.children.size() == 0;
     bool unused   = variadic;
 
     for (::std::size_t i = 0; i < arglist.children.size(); ++i) {
       if (!::std::holds_alternative<symbol>(arglist.children[i].expr)) {
-        return fail(error_info{
-          "Expected a symbol.",
-          arglist.children[i].pos
-        });   
+        FAIL_WITH("Expected a symbol.", arglist.children[i].pos);   
       }
 
       if (::std::get<symbol>(arglist.children[i].expr)[0] == '&') {
         if (variadic) {
-          return fail(error_info{
-            "Can not have more than one variadic sign.",
-            arglist.children[i].pos
-          });
+          FAIL_WITH(
+            "Can not have more than one variadic sign.", arglist.children[i].pos
+          );
         }
         variadic = true;
         if (arglist.children.size() - i > 2) {
-          return fail(error_info{
+          FAIL_WITH(
             "Variadic sign expects either zero or one argument.",
             arglist.children[i].pos
-          });
+          );
         }
         unused = i == arglist.children.size() - 1;
       }
@@ -580,7 +354,8 @@ namespace yl {
       u.pos,
       function{
         .description = "User defined function.",
-        .func = create_function(variadic, unused, arglist, body, v_body.pos)
+        .func = create_function(
+            variadic, unused, arglist, ::std::get<list>(args[2].expr), args[2].pos)
       }
     });
   }
@@ -628,11 +403,8 @@ namespace yl {
    */
 
   result_type resolve_symbol(unit const& pu, env_node_ptr node) noexcept {
-    if (!::std::holds_alternative<symbol>(pu.expr)) {
-      return fail(error_info{
-        "Expected a symbol.",
-        pu.pos
-      });
+    if (!is_symbol(pu.expr)) {
+      FAIL_WITH("Expected a symbol.", pu.pos);
     }
 
     auto starting_point = node;
@@ -641,18 +413,14 @@ namespace yl {
     for (;;) {
       while (!(node->curr->count(s))) {
         if (!node->prev) {
-          return fail(error_info{
-            concat("Symbol ", s, " is undefined."),
-            pu.pos 
-          });     
+          FAIL_WITH(concat("Symbol ", s, " is undefined."), pu.pos);     
         }
-
         node = node->prev;
       }
 
       auto next = node->curr->operator[](s);
 
-      if (!::std::holds_alternative<symbol>(next)) {
+      if (!is_symbol(next)) {
         return succeed(unit{pu.pos, next});
       }
 
@@ -666,11 +434,11 @@ namespace yl {
     env_node_ptr node, 
     bool const eval_q
   ) noexcept {
-    if (::std::holds_alternative<numeric>(pu.expr)) {
+    if (is_numeric(pu.expr)) {
       return succeed(pu);
     }
 
-    if (::std::holds_alternative<symbol>(pu.expr)) {
+    if (is_symbol(pu.expr)) {
       if (auto rsr = resolve_symbol(pu, node); rsr) {
         return succeed(rsr.value());
       } else {
@@ -678,45 +446,39 @@ namespace yl {
       }
     }
 
-    if (::std::holds_alternative<list>(pu.expr)) {
-      auto const& ls = ::std::get<list>(pu.expr);
+    if (is_list(pu.expr)) {
+      auto ls = ::std::get<list>(pu.expr);
 
       if (!eval_q && ls.q) {
         return succeed(pu);
       }
 
       if (ls.children.empty()) {
-        return fail(error_info{
-          "Expected a non-empty expression.",
-          pu.pos
-        });
+        FAIL_WITH("Expected a non-empty expression.", pu.pos);
+      }
+      
+      for (auto& child : ls.children) {
+        auto new_child = eval(child, node);
+        RETURN_IF_ERROR(new_child);
+        child = new_child.value();
       }
 
-      // ??
-      /*if (ls.children.size() == 1) {
-        return eval(ls.children.front(), node);
-      }*/
-
-      auto either_operator = eval(ls.children.front(), node);
-
-      if (!either_operator) {
-        return either_operator;
+      if (ls.children.size() == 1 && !is_function(ls.children.front().expr)) {
+        return succeed(ls.children.front());
       }
 
-      auto const& maybe_operator = either_operator.value();
-
-      if (!::std::holds_alternative<function>(maybe_operator.expr)) {
-        return fail(error_info{
+      if (!is_function(ls.children.front().expr)) {
+        FAIL_WITH(
           "Expected a builtin or user defined function.",
-          maybe_operator.pos
-        });
+          ls.children.front().pos
+        );
       }
 
-      auto const& fn = ::std::get<function>(maybe_operator.expr);
-      return fn.func(pu, node);
+      auto const& fn = ::std::get<function>(ls.children.front().expr);
+      return fn.func({pu.pos, ls}, node);
     }
 
-    if (::std::holds_alternative<function>(pu.expr)) {
+    if (is_function(pu.expr)) {
       return succeed(pu);
     }
 
