@@ -438,15 +438,14 @@ namespace yl {
       {"len", function{"Calculates the length of a Q expression.", len_m}},
       {"init", function{"Returns a Q expression without it's last element.", init_m}},
       {"def", function{
-        "Global assignment to symbols in a Q expression.\n"
-        "'def {a b} 1 2' assigns 1 and 2 to a and b.",
+        "Global assignment to symbols in a Q expression. "
+        "For example 'def {a b} 1 2' assigns 1 and 2 to a and b.",
         def_m
       }},
       {"\\", function{
         "Lambda function, takes a Q expression argument list, "
-        "and a Q expression body.\n"
-        "Example: (\\{x y} {+ x y}) 2 3\n"
-        "Result: 5",
+        "and a Q expression body. "
+        "For example '(\\{x y} {+ x y}) 2 3' will yield 5",
         lambda_m
       }},
       {"help", function{"Outputs information about a symbol.", help_m}},

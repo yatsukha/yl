@@ -44,3 +44,35 @@ To interpret a file pass it as an argument to the interpreter.
 ```
 $ ./interpreter ../examples.yl
 ```
+
+### Example usage
+
+```
+$ ./interpreter
+yatsukha's lisp
+^C to exit, 'help' to get started
+detected predef at '.predef.yl', reading...
+yl> def {sqr} (\{x} {* x x})
+()
+yl> sqr 2
+4
+yl> sqr 2 5
+    ^
+Excess arguments, expected 1, got 2.
+yl> sqr
+<fn>: User defined partially evaluated function.
+yl> (sqr) 2
+4
+yl> help \
+{
+  type: function
+  value: <fn>: Lambda function, takes a Q expression argument list, and a Q expression body. For example '(\{x y} {+ x y}) 2 3' will yield 5
+}
+yl> help def
+{
+  type: function
+  value: <fn>: Global assignment to symbols in a Q expression. For example 'def {a b} 1 2' assigns 1 and 2 to a and b.
+}
+```
+
+For more information refer to `help`.
