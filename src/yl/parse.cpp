@@ -28,16 +28,41 @@ namespace yl {
     }
   }
 
+  char left_paren(char const c) noexcept {
+    return (c == '(' || c == '{') ? c : 0;
+  }
+
+  char right_paren(char const c) noexcept {
+    return (c == ')' || c == '}') ? c : 0;
+  }
+
+  char paren(char const c) noexcept {
+    return left_paren(c) ?: right_paren(c);
+  }
+
+  int paren_balance(char const* line) noexcept {
+    pos p = 0;
+    int balance = 0;
+
+    while (line[p]) {
+      if (left_paren(line[p])) {
+        --balance;
+      } else if (right_paren(line[p])) {
+        ++balance;
+      }
+
+      ++p;
+    }
+
+    return balance;
+  }
+
   result_type parse_terminal(
       char const* line, ::std::size_t const line_num, prf curr) noexcept { 
-    auto const static is_paren = [](auto&& c) {
-      return c == '(' || c == ')'
-              || c == '{' || c == '}';
-    };
 
     pos const start = curr;
     while (!is_eof(line, curr) && !::std::isblank(line[curr]) 
-            && !is_paren(line[curr])) {
+            && !paren(line[curr])) {
       ++curr;
     }
 
@@ -60,13 +85,6 @@ namespace yl {
 
     auto ls = list{};
     auto expr = unit{{line_num, curr}};
-
-    auto const static left_paren = [](auto&& c) {
-      return c == '(' || c == '{';
-    };
-    auto const static right_paren = [](auto&& c) {
-      return c == ')' || c == '}';
-    };
 
     while (!is_eof(line, curr) && !right_paren(line[curr])) {
       if (!left_paren(line[curr])) {
@@ -110,8 +128,7 @@ namespace yl {
       }
     }
 
-    expr.expr = ls;
-    
+    expr.expr = ls; 
     return succeed(expr);
   }
 
@@ -121,7 +138,7 @@ namespace yl {
     if (!ret) {
       return ret;
     }
-    if (line[p] == ')' || line[p] == '}') {
+    if (right_paren(line[p])) {
       return fail(error_info{"Unmatched parenthesis.", {line_num, p}});
     }
     return ret;

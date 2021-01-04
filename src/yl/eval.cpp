@@ -475,7 +475,7 @@ namespace yl {
     for (;;) {
       while (!(node->curr->count(s))) {
         if (!node->prev) {
-          FAIL_WITH(concat("Symbol ", s, " is undefined."), pu.pos);     
+          FAIL_WITH(concat("Symbol ", s, " is undefined."), pu.pos); 
         }
         node = node->prev;
       }

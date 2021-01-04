@@ -1,9 +1,12 @@
 #pragma once
 
+#include <cstdlib>
+#include <cstring>
 #include <functional>
-#include <type_traits>
-
+#include <memory>
 #include <yl/util.hpp>
+#include <type_traits>
+#include <utility>
 
 namespace yl {
 
@@ -15,26 +18,52 @@ namespace yl {
     auto constexpr static sz_s = sizeof(_S);
     auto constexpr static max_sz = ::std::max(sz_e, sz_s);
 
+    auto constexpr static alignment = ::std::max(alignof(_E), alignof(_S));
+    auto constexpr static actual_sz = max_sz + alignment;
+
    public:
     using error_type = E;
     using success_type = S;
 
     // the price to pay
-    alignas(::std::max(alignof(_E), alignof(_S))) char data[max_sz];
-    bool err;
+    // alignas(::std::max(alignof(_E), alignof(_S))) char data[max_sz];
 
-    explicit either(bool const is_error = true) noexcept 
-      : err(is_error) {}
+    ::std::shared_ptr<char[]> data{
+      reinterpret_cast<char*>(::aligned_alloc(alignment, actual_sz << 1)),
+      [sz = actual_sz](auto* ptr) {
+        char* data = reinterpret_cast<char*>(ptr);
+
+        if (data[sz]) {
+          if constexpr (!::std::is_same_v<void, E>) {
+            (*reinterpret_cast<E*>(data)).~E();
+          }
+        } else {
+          if constexpr (!::std::is_same_v<void, S>) {
+            (*reinterpret_cast<S*>(data)).~S();
+          }
+        }
+
+        ::free(ptr);
+      }
+    };
+
+    explicit either(bool const is_error = true) noexcept {
+      data[actual_sz] = is_error;
+    }
 
     bool is_error() const noexcept {
-      return err;
+      return data[actual_sz] & 0b1;
     }
 
     operator bool() const noexcept {
-      return !is_error();
+      return data[actual_sz] ^ 0b1;
     }
 
-    ~either() {
+    /*~either() {
+      if (state & 0b10) {
+        return;
+      }
+
       if (is_error()) {
         if constexpr (!::std::is_same_v<void, E>) {
           (*reinterpret_cast<E*>(data)).~E();
@@ -47,7 +76,18 @@ namespace yl {
     }
 
     either(either const& other) noexcept { 
-      *this = other;
+      if (other) {
+        if constexpr (!::std::is_same_v<void, S>) {
+          new (data) S(other.value());
+
+        }
+      } else {
+        if constexpr (!::std::is_same_v<void, E>) {
+          new (data) E(other.error());
+        }
+      }
+      state = other.state;
+      state &= 0b01;
     }
 
     either& operator=(either const& other) noexcept {
@@ -60,38 +100,52 @@ namespace yl {
           new (data) E(other.error());
         }
       }
-      err = other.err;
+      state = other.state;
+      state &= 0b01;
       return *this;
     }
 
     either(either&& other) noexcept {
-      *this = ::std::forward<either>(other);
+      if (other) {
+        if constexpr (!::std::is_same_v<void, S>) {
+          new (data) S(other.value());
+
+        }
+      } else {
+        if constexpr (!::std::is_same_v<void, E>) {
+          new (data) E(other.error());
+        }
+      }
+      state = other.state;
+      other.state |= 0b10;
+      state &= 0b01;
     }
 
     either& operator=(either&& other) noexcept {
       if (other) {
         if constexpr (!::std::is_same_v<void, S>) {
-          new (data) S(::std::move(*reinterpret_cast<S*>(other.data)));
-
+          new (data) S(other.value());
         }
       } else {
         if constexpr (!::std::is_same_v<void, E>) {
-          new (data) E(::std::move(*reinterpret_cast<E*>(other.data)));
+          new (data) E(other.error());
         }
       }
-      err = other.err;
+      state = other.state;
+      other.state |= 0b10;
+      state &= 0b01;
       return *this;
-    }
+    }*/
 
     template<typename EE>
     operator either<EE, S>() const noexcept {
       if (is_error()) {
-        terminate_with("Invalid widening from an error value.");
+        terminate_with("Invalid widening from a void error value.");
       }  
   
       either<EE, S> ret{is_error()};
       if constexpr (!::std::is_same_v<void, S>) {
-        new (ret.data) S{value()};
+        new (ret.data.get()) S{value()};
       }
       return ret;
     }
@@ -99,12 +153,12 @@ namespace yl {
     template<typename SS>
     operator either<E, SS>() const noexcept {
       if (!is_error()) {
-        terminate_with("Invalid widening from a success value.");
+        terminate_with("Invalid widening from a void success value.");
       }
 
       either<E, SS> ret{is_error()};
       if constexpr (!::std::is_same_v<void, E>) {
-        new (ret.data) E{error()};
+        new (ret.data.get()) E{error()};
       }
       return ret;
     }
@@ -114,7 +168,7 @@ namespace yl {
       if (is_error()) {
         terminate_with("Bad either value access.");
       }
-      return *reinterpret_cast<A const*>(data);
+      return *reinterpret_cast<A const*>(data.get());
     }
 
     template<typename A = E, typename = ::std::enable_if_t<!::std::is_same_v<void, A>>>
@@ -122,7 +176,7 @@ namespace yl {
       if (!is_error()) {
         terminate_with("Bad either error access.");
       }
-      return *reinterpret_cast<A const*>(data);
+      return *reinterpret_cast<A const*>(data.get());
     }
 
     template<typename A = S, typename = ::std::enable_if_t<!::std::is_same_v<void, A>>>
@@ -156,14 +210,14 @@ namespace yl {
   template<typename S, typename SS = ::std::remove_reference_t<S>>
   inline either<void, SS> succeed(S s) noexcept {
     either<void, SS> e{false};
-    new (e.data) SS{s};
+    new (e.data.get()) SS{s};
     return e;
   }    
 
   template<typename E, typename EE = ::std::remove_reference_t<E>>
   inline either<EE> fail(E e) noexcept {
     either<EE> ret{true};
-    new (ret.data) EE{e};
+    new (ret.data.get()) EE{e};
     return ret;
   } 
 
@@ -196,7 +250,7 @@ namespace yl {
   inline either<E, S> any(
     either<E, S> const& u,
     either<E, S> const& v
-  ) noexcept {
+    ) noexcept {
     if (u) return u;
     if (v) return v;
     return fail(u.error());

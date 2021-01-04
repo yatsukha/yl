@@ -20,14 +20,17 @@ namespace yl {
 
   void print_error(
     ::std::size_t const prompt_offset,
+    bool const continuated,
     error_info const& err,
     ::std::ostream& std_err
   ) noexcept {
-    auto const past = ::history_length - err.pos.line;
+    auto const past = ::history_length - err.pos.line - 1;
     
-    if (past) {
+    if (past || continuated) {
       auto** list = ::history_list();
-      ::std::cout << past << " entries ago:" << "\n";
+      if (past) {
+        ::std::cout << past << " entries ago:" << "\n";
+      }
       ::std::cout << list[err.pos.line]->line << "\n";
     }
 
@@ -42,64 +45,152 @@ namespace yl {
   void handle_input(
     char const* user_input,
     ::std::size_t const prompt_offset,
+    bool const continuated,
     ::std::ostream& std_out,
     ::std::ostream& std_err
   ) noexcept {
     auto const parse_expr = parse(user_input, ::history_length);
+    ::add_history(user_input);
     
     if (!parse_expr) {
-      print_error(prompt_offset, parse_expr.error(), std_err);
+      print_error(prompt_offset, continuated, parse_expr.error(), std_err);
       return;
     }
 
     auto const eval_expr = eval(parse_expr.value());
 
     if (!eval_expr) {
-      print_error(prompt_offset, eval_expr.error(), std_err);
+      print_error(prompt_offset, continuated, eval_expr.error(), std_err);
       return;
     }
 
     std_out << eval_expr.value().expr; 
   }
 
+  // true if eof
+  bool handle_line(
+    ::std::function<char*()> line_supplier, 
+    ::std::size_t const p_sz,
+    ::std::ostream& out,
+    ::std::ostream& err
+  ) noexcept {
+    ::std::size_t constexpr static buf_size = 1 << 13;
+    char buf[buf_size];
+    buf[0] = 0;
+
+    auto* input = line_supplier();
+
+    if (!input) {
+      return true;
+    }
+
+    if (!input[0]) {
+      ::free(input);
+      return false;
+    }
+
+    auto balance = ::yl::paren_balance(input);
+    auto continuated = balance < 0;
+
+    ::std::strcat(buf, input);
+    ::free(input);
+
+    while (balance < 0) {
+      input = line_supplier();
+      if (!input[0]) {
+        ::free(input);
+        break; 
+      }
+      balance += ::yl::paren_balance(input);
+      ::std::strcat(buf, " ");
+      ::std::strcat(buf, input);
+      ::free(input);
+    }
+
+    if (!p_sz) {
+      out << buf << "\n";
+    }
+
+    ::yl::handle_input(buf, p_sz, continuated, out, err);
+    out << "\n";
+
+    if (!p_sz) {
+      out << "\n";
+    }
+
+    return false;
+  }
+
+  int insert_spaces(int, int) {
+    ::rl_insert_text("  ");
+    return 0;
+  }
+
+  auto handle_file(
+    ::std::ifstream&& file,
+    ::std::ostream& out,
+    ::std::ostream& err
+  ) noexcept {
+    while (!::yl::handle_line(
+      [&file] { 
+        ::std::size_t constexpr static buf_size = 1 << 13;
+        char* buf = reinterpret_cast<char*>(::malloc(buf_size));
+
+        if (file.getline(buf, buf_size)) {
+          return buf;
+        }
+        
+        ::free(buf);
+        return static_cast<char*>(nullptr);
+      }, 
+      0, out, err
+    ))
+      ;
+  }
+
 }
 
 int main(int const argc, char const* const* argv) {
+  ::rl_bind_key('\t', ::yl::insert_spaces);
+
   ::std::cout << "yatsukha's lisp" << "\n";
   ::std::cout << "^C to exit, 'help' to get started" << "\n";
 
   ::std::string predef_name = ".predef.yl";
-
   ::std::ifstream predef(predef_name);
 
   if (predef.is_open()) {
+    ::std::ostream dev_null{nullptr};
+
     ::std::cout << "detected predef at '" << predef_name
                 << "', reading..."
                 << "\n";
-    ::std::size_t buf_size = 1024;
-    char* arr = new char[buf_size];
-    ::std::ostream dev_null{nullptr};
-    while (predef.getline(arr, buf_size)) {
-      if (arr[0]) {
-        ::yl::handle_input(arr, 0, dev_null, ::std::cerr);
-        ::add_history(arr);
-      }
-    }
+
+    ::yl::handle_file(::std::move(predef), dev_null, ::std::cerr);
   }
 
-  ::std::string prompt = "yl> ";
+  ::std::ifstream input_file;
 
-  while (true) {
-    auto const* input = ::readline(prompt.c_str());
+  if (argc > 1) {
+    input_file = ::std::ifstream{argv[1]};
+  }
 
-    if (!input[0]) {
-      continue;
-    }
+  if (input_file.is_open()) {
+    ::std::cout << "interpreting '" << argv[1] << "'" << "\n\n";
+    ::yl::handle_file(::std::move(input_file), ::std::cout, ::std::cerr);
+  } else {
+    ::std::string prompt = "yl> ";
+    ::std::string continuation_prompt = "... ";
 
-    ::yl::handle_input(input, prompt.size(), ::std::cout, ::std::cerr);
-
-    ::std::cout << "\n";
-    ::add_history(input);
+    while (!::yl::handle_line(
+      [i = 0, &prompt, &continuation_prompt]() mutable {
+        return ::readline((i++ ? continuation_prompt : prompt).c_str());
+      }, 
+      prompt.size(), 
+      ::std::cout,
+      ::std::cerr
+    ))
+      ;
   }
 
   ::rl_clear_history();
