@@ -28,16 +28,6 @@ namespace yl {
     FAIL_WITH("Argument count must be " #eq ".", pos) \
   }
 
-#define DEF_TYPE_CHECK(type) \
-  bool is_##type(expression const& expr) noexcept { \
-    return ::std::holds_alternative<type>(expr); \
-  }
-
-  DEF_TYPE_CHECK(numeric);
-  DEF_TYPE_CHECK(symbol);
-  DEF_TYPE_CHECK(function);
-  DEF_TYPE_CHECK(list);
-
 #define Q_OR_ERROR(unit) \
   if (!is_list(unit.expr) \
       || !::std::get<list>(unit.expr).q) {\
@@ -46,6 +36,16 @@ namespace yl {
        unit.pos \
     });  \
   }
+
+#define DEF_TYPE_CHECK(type) \
+  inline bool is_##type(expression const& expr) noexcept { \
+    return ::std::holds_alternative<type>(expr); \
+  }
+
+  DEF_TYPE_CHECK(numeric);
+  DEF_TYPE_CHECK(symbol);
+  DEF_TYPE_CHECK(function);
+  DEF_TYPE_CHECK(list);
 
   /*
    *
@@ -62,7 +62,7 @@ namespace yl {
   }
 
 #define ARITHMETIC_OPERATOR(name, operation) \
-  result_type name(unit operand, env_node_ptr node) noexcept { \
+  result_type name##_m(unit operand, env_node_ptr node) noexcept { \
     auto idx = operand.pos; \
     auto const& args = ::std::get<list>(operand.expr).children; \
     ASSERT_ARG_COUNT(args, idx, >= 1); \
@@ -81,6 +81,14 @@ namespace yl {
   ARITHMETIC_OPERATOR(sub, -);
   ARITHMETIC_OPERATOR(mul, *);
   ARITHMETIC_OPERATOR(div, /);
+ /* ARITHMETIC_OPERATOR(mod, %);
+
+  ARITHMETIC_OPERATOR(and, &);
+  ARITHMETIC_OPERATOR(or, |);
+  ARITHMETIC_OPERATOR(xor, ^);
+
+  ARITHMETIC_OPERATOR(shl, <<);
+  ARITHMETIC_OPERATOR(shr, >>);*/
 
   result_type eval_m(unit operand, env_node_ptr node) noexcept {
     auto const& args = ::std::get<list>(operand.expr).children;
@@ -330,7 +338,7 @@ namespace yl {
     bool unused   = variadic;
 
     for (::std::size_t i = 0; i < arglist.children.size(); ++i) {
-      if (!::std::holds_alternative<symbol>(arglist.children[i].expr)) {
+      if (!is_symbol(arglist.children[i].expr)) {
         FAIL_WITH("Expected a symbol.", arglist.children[i].pos);   
       }
 
@@ -396,7 +404,10 @@ namespace yl {
         s += "\n";
       }
 
-      return succeed(unit{u.pos, list{true, {unit{u.pos, s}}}});
+      // TODO: convert to string
+      return succeed(unit{u.pos, list{
+          true, {unit{u.pos, s}} 
+      }});
     }
 
     expression expr;
@@ -420,15 +431,112 @@ namespace yl {
     ss << expr << "\n";
     s += ss.str();
     
-    return succeed(unit{u.pos, list{true, {unit{u.pos, s}}}});
+    return succeed(unit{u.pos, list{true, {unit{
+        u.pos, s
+    }}}});
+  }
+
+  /*
+   *
+   * COMPARISON AND ORDERING
+   *
+   */
+
+  either<error_info, bool> operator==(unit const& a, unit const& b) noexcept {
+    if (a.expr.index() != b.expr.index()) {
+      return succeed(false);
+    }
+
+    if (is_numeric(a.expr)) {
+      return succeed(::std::get<numeric>(a.expr) == ::std::get<numeric>(b.expr));
+    }
+
+    if (is_symbol(a.expr)) {
+      return succeed(::std::get<symbol>(a.expr) == ::std::get<symbol>(b.expr));
+    }
+
+    if (is_list(a.expr)) {
+      auto const& al = ::std::get<list>(a.expr);
+      auto const& bl = ::std::get<list>(b.expr);
+
+      return succeed(al.q == bl.q && al.children == bl.children);
+    }
+    
+    FAIL_WITH("Function comparison is unsupported.", a.pos);
+  }
+
+  result_type equal_m(unit u, env_node_ptr env) noexcept {
+    auto const& args = ::std::get<list>(u.expr).children;
+    ASSERT_ARG_COUNT(args, u.pos, == 2);
+    auto ret = args[1] == args[2];
+    RETURN_IF_ERROR(ret); 
+    return succeed(unit{u.pos, static_cast<numeric>(ret.value())});
+  }
+
+
+  result_type not_equal_m(unit u, env_node_ptr env) noexcept {
+    auto ret = equal_m(u, env);
+    RETURN_IF_ERROR(ret);
+    return succeed(unit{u.pos, !::std::get<numeric>(ret.value().expr)});;
+  }
+
+#define SIMPLE_ORDERING(name, op) \
+  result_type name##_m(unit u, env_node_ptr env) noexcept { \
+    auto const& args = ::std::get<list>(u.expr).children; \
+    ASSERT_ARG_COUNT(args, u.pos, == 2); \
+    if (args[1].expr.index() != args[1].expr.index() \
+        || !is_numeric(args[1].expr)) { \
+      FAIL_WITH("Expected two numeric arguments", u.pos);  \
+    } \
+    return succeed(unit{u.pos, static_cast<numeric>( \
+      ::std::get<numeric>(args[1].expr) op ::std::get<numeric>(args[2].expr) \
+    )}); \
+  }
+
+  SIMPLE_ORDERING(less_than, <);
+  SIMPLE_ORDERING(greater_than, >);
+  SIMPLE_ORDERING(less_or_equal, <=);
+  SIMPLE_ORDERING(greater_or_equal, >=);
+
+  result_type if_m(unit u, env_node_ptr env) noexcept {
+    auto const& args = ::std::get<list>(u.expr).children;
+
+    ASSERT_ARG_COUNT(args, u.pos, >= 2);
+    ASSERT_ARG_COUNT(args, u.pos, <= 3);
+
+    bool has_else = args.size() == 4;
+
+    if (!is_numeric(args[1].expr)) {
+      FAIL_WITH("Expected a numeric value.", u.pos);
+    }
+
+    Q_OR_ERROR(args[2]);
+    if (has_else) {
+      Q_OR_ERROR(args[3]);
+    }
+
+    if (!::std::get<numeric>(args[1].expr)) {
+      if (has_else) {
+        return eval(args[3], env, true);
+      }
+      return eval(unit{u.pos, list{.q = false, .children = {}}});
+    } else {
+      return eval(args[2], env, true);
+    }
   }
    
   env_node_ptr global_environment() noexcept {
     auto static g_env = ::std::make_shared<environment>(environment{
-      {"+", function{"Adds numbers.", add}},
-      {"-", function{"Subtracts numbers.", sub}},
-      {"*", function{"Multiplies numbers.", mul}},
-      {"/", function{"Divides numbers.", div}},
+      {"+", function{"Adds numbers.", add_m}},
+      {"-", function{"Subtracts numbers.", sub_m}},
+      {"*", function{"Multiplies numbers.", mul_m}},
+      {"/", function{"Divides numbers.", div_m}},
+/*      {"%", function{"Modulo.", mod_m}},
+      {"&", function{"Binary and.", and_m}},
+      {"|", function{"Binary or.", or_m}},
+      {"^", function{"Binary xor.", xor_m}},
+      {"<<", function{"Shift left.", shl_m}},
+      {">>", function{"Shift right.", shr_m}}, */
       {"eval", function{"Evaluates a Q expression.", eval_m}},
       {"list", function{"Takes arguments and turns them into a Q expression.", list_m}},
       {"head", function{"Takes a Q expression and returns the first subexpression.", head_m}},
@@ -449,6 +557,24 @@ namespace yl {
         lambda_m
       }},
       {"help", function{"Outputs information about a symbol.", help_m}},
+      {"==", function{
+        "Compares arguments for equality. Can not compare functions.",
+        equal_m
+      }},
+      {"!=", function{
+        "Compares arguments for non equality. Can not compare functions.",
+        not_equal_m
+      }},
+      {"<", function{"Tests if first number is less than second.", less_than_m}},
+      {">", function{"Tests if first number is greater than second.", greater_than_m}},
+      {"<=", function{"Tests if first number is less than or equal to second.", less_or_equal_m}},
+      {">=", function{"Tests if first number is greater than or equal to second.", greater_or_equal_m}},
+      {"if", function{
+        "If(-else) statement. Takes a numeric for test. "
+        "If it is != 0 it executes the first given Q expression. "
+        "Otherwise, if it exists, it executes the second Q expression.",
+        if_m
+      }},
     });
 
     return ::std::make_shared<env_node>(env_node{
@@ -493,7 +619,7 @@ namespace yl {
   result_type eval(
     unit const& pu, 
     env_node_ptr node, 
-    bool const eval_q
+    bool const force_eval
   ) noexcept {
     if (is_numeric(pu.expr)) {
       return succeed(pu);
@@ -510,12 +636,13 @@ namespace yl {
     if (is_list(pu.expr)) {
       auto ls = ::std::get<list>(pu.expr);
 
-      if (!eval_q && ls.q) {
+      if (!force_eval && ls.q) {
         return succeed(pu);
       }
 
       if (ls.children.empty()) {
-        FAIL_WITH("Expected a non-empty expression.", pu.pos);
+        return succeed(pu);
+        //FAIL_WITH("Expected a non-empty expression.", pu.pos);
       }
       
       for (auto& child : ls.children) {

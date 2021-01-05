@@ -5,6 +5,7 @@
 #include <limits>
 #include <string>
 #include <memory>
+#include <utility>
 #include <variant>
 
 #include <readline/readline.h>
@@ -84,7 +85,7 @@ namespace yl {
       return true;
     }
 
-    if (!input[0]) {
+    if (!input[0] || input[0] == '#') {
       ::free(input);
       return false;
     }

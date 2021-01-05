@@ -1,3 +1,4 @@
+#include "yl/types.hpp"
 #include <iostream>
 #include <stdexcept>
 #include <variant>
@@ -69,10 +70,12 @@ namespace yl {
     symbol s(line + start, line + curr);
 
     try {
-      return succeed(unit{{line_num, start}, ::std::stod(s)});
+      return succeed(unit{{line_num, start}, ::std::stol(s)});
     } catch (::std::invalid_argument const&) {}
 
-    return succeed(unit{{line_num, start}, s});
+    return succeed(
+      unit{{line_num, start}, s}
+    );
   }
 
   result_type parse_expression(
@@ -128,7 +131,7 @@ namespace yl {
       }
     }
 
-    expr.expr = ls; 
+    expr.expr = ::std::move(ls); 
     return succeed(expr);
   }
 

@@ -4,6 +4,7 @@
 #include <string>
 #include <functional>
 #include <unordered_map>
+#include <utility>
 #include <variant>
 #include <memory>
 
@@ -16,13 +17,15 @@ namespace yl {
   struct list;
   struct function;
 
-  using numeric = double;
+  using numeric = ::std::int64_t;
   using symbol  = ::std::string;
 
   using expression = ::std::variant<numeric, symbol, list, function>;
 
   ::std::ostream& operator<<(::std::ostream& out, expression const&) noexcept;
   ::std::string type_of(expression const&) noexcept;
+
+  // environment
 
   using environment = ::std::unordered_map<symbol, expression>;
   using env_ptr     = ::std::shared_ptr<environment>;
@@ -38,7 +41,7 @@ namespace yl {
 
   env_node_ptr global_environment() noexcept;
 
-  // helpers
+  // helpers for error reporting
   
   struct position {
     ::std::size_t line;
@@ -50,16 +53,16 @@ namespace yl {
     position const pos;
   };
 
+  // other type definitions
+  
   struct unit;
-
-  using result_type = either<error_info, unit>;
-
-  //
 
   struct list {
     bool q = false;
     ::std::vector<unit> children;
   };
+
+  using result_type = either<error_info, unit>;
 
   struct function {
     using type = ::std::function<result_type(unit, env_node_ptr)>;

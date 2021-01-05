@@ -12,6 +12,7 @@ This section just lists interesting features, not all of them.
  * variadic arguments for user defined functions
  * partially evaluated user defined functions: if the function is not variadic and you pass less than the required number of arguments the function will be bound to those arguments
  * breaking expressions into multiple lines
+ * recursive functions
 
 ## Building
 
@@ -21,12 +22,19 @@ Requires:
   * C++17 compiler
   * readline
 
+It is recommended to build as for release if you plan on running more complex programs.
 In the directory where `meson.build` resides:
 
 ```
-$ meson build
+$ meson build --buildtype release
 $ cd build
 $ ninja
+```
+
+If you need debug info and an address sanitizer use this instead:
+
+```
+$ meson -Db_sanitize=address build
 ```
 
 ## Running
@@ -76,3 +84,7 @@ yl> help def
 ```
 
 For more information refer to `help`.
+
+## Performance
+
+Aproximately 10^7 operations per second on a single core of a 3.5GHz CPU. Tested using fibonacci.
