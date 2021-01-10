@@ -2,6 +2,7 @@
 #include "yl/types.hpp"
 #include <cstdlib>
 #include <debug/assertions.h>
+#include <iostream>
 #include <memory>
 #include <sstream>
 #include <unordered_map>
@@ -28,14 +29,6 @@ namespace yl {
     FAIL_WITH("Argument count must be " #eq ".", pos) \
   }
 
-#define Q_OR_ERROR(unit) \
-  if (!is_list(unit.expr) \
-      || !::std::get<list>(unit.expr).q) {\
-    return fail(error_info{ \
-      "Expected a Q expression.", \
-       unit.pos \
-    });  \
-  }
 
 #define DEF_TYPE_CHECK(type) \
   inline bool is_##type(expression const& expr) noexcept { \
@@ -43,9 +36,21 @@ namespace yl {
   }
 
   DEF_TYPE_CHECK(numeric);
-  DEF_TYPE_CHECK(symbol);
+  DEF_TYPE_CHECK(string);
   DEF_TYPE_CHECK(function);
   DEF_TYPE_CHECK(list);
+
+  bool is_q(unit u) noexcept {
+    return is_list(u.expr) && ::std::get<list>(u.expr).q;
+  }
+
+#define Q_OR_ERROR(unit) \
+  if (!is_q(unit)) {\
+    return fail(error_info{ \
+      "Expected a Q expression.", \
+       unit.pos \
+    });  \
+  }
 
   /*
    *
@@ -81,14 +86,14 @@ namespace yl {
   ARITHMETIC_OPERATOR(sub, -);
   ARITHMETIC_OPERATOR(mul, *);
   ARITHMETIC_OPERATOR(div, /);
- /* ARITHMETIC_OPERATOR(mod, %);
+  ARITHMETIC_OPERATOR(mod, %);
 
   ARITHMETIC_OPERATOR(and, &);
   ARITHMETIC_OPERATOR(or, |);
   ARITHMETIC_OPERATOR(xor, ^);
 
   ARITHMETIC_OPERATOR(shl, <<);
-  ARITHMETIC_OPERATOR(shr, >>);*/
+  ARITHMETIC_OPERATOR(shr, >>);
 
   result_type eval_m(unit operand, env_node_ptr node) noexcept {
     auto const& args = ::std::get<list>(operand.expr).children;
@@ -229,11 +234,12 @@ namespace yl {
     }
 
     for (::std::size_t i = 0; i < arguments.size(); ++i) {
-      if (!is_symbol(arguments[i].expr)) {
+      if (!is_string(arguments[i].expr)
+          || ::std::get<string>(arguments[i].expr).raw) {
         FAIL_WITH("Unexpected non-symbol in the argument list.", arguments[i].pos);
       }
 
-      (*g_env->curr)[::std::get<symbol>(arguments[i].expr)] = args[2 + i].expr;
+      (*g_env->curr)[::std::get<string>(arguments[i].expr).str] = args[2 + i].expr;
     }
 
     return succeed(unit{u.pos, list{}});
@@ -276,19 +282,19 @@ namespace yl {
 
       for (::std::size_t i = 0; 
            i != (arglist.children.size() ? arguments.size() - 1 : 0); ++i) {
-        auto sym = ::std::get<symbol>(arglist.children[i].expr);
-        if (sym[0] == '&') {
+        auto sym = ::std::get<string>(arglist.children[i].expr);
+        if (sym.str[0] == '&') {
           if (unused) {
             break;
           }
         
-          (*self_env)[::std::get<symbol>(arglist.children[i + 1].expr)] = list{
+          (*self_env)[::std::get<string>(arglist.children[i + 1].expr).str] = list{
             true, {arguments.begin() + i + 1, arguments.end()}
           };
           break;
         }
 
-        (*self_env)[::std::get<symbol>(arglist.children[i].expr)] = 
+        (*self_env)[::std::get<string>(arglist.children[i].expr).str] = 
           arguments[i + 1].expr;
       }
 
@@ -327,10 +333,22 @@ namespace yl {
   result_type lambda_m(unit u, env_node_ptr node) noexcept {
     auto const& args = ::std::get<list>(u.expr).children;
 
-    ASSERT_ARG_COUNT(args, u.pos, == 2);
+    ASSERT_ARG_COUNT(args, u.pos, >= 2);
+    ASSERT_ARG_COUNT(args, u.pos, <= 3);
 
     Q_OR_ERROR(args[1]);
-    Q_OR_ERROR(args[2]);
+
+    ::std::string doc_string = "User defined function.";
+
+    if (args.size() == 4) {
+      Q_OR_ERROR(args[3]);
+      if (!is_string(args[2].expr) || !::std::get<string>(args[2].expr).raw) {
+        FAIL_WITH("Expected a raw doc-string.", args[2].pos);
+      }
+      doc_string = ::std::get<string>(args[2].expr).str;
+    } else {
+      Q_OR_ERROR(args[2]);
+    }
 
     auto const arglist = ::std::get<list>(args[1].expr);
 
@@ -338,11 +356,12 @@ namespace yl {
     bool unused   = variadic;
 
     for (::std::size_t i = 0; i < arglist.children.size(); ++i) {
-      if (!is_symbol(arglist.children[i].expr)) {
+      if (!is_string(arglist.children[i].expr) 
+          || ::std::get<string>(arglist.children[i].expr).raw) {
         FAIL_WITH("Expected a symbol.", arglist.children[i].pos);   
       }
 
-      if (::std::get<symbol>(arglist.children[i].expr)[0] == '&') {
+      if (::std::get<string>(arglist.children[i].expr).str[0] == '&') {
         if (variadic) {
           FAIL_WITH(
             "Can not have more than one variadic sign.", arglist.children[i].pos
@@ -359,12 +378,14 @@ namespace yl {
       }
     }
 
+    auto const& body = args.size() == 4 ? args[3] : args[2];
+
     return succeed(unit{
       u.pos,
       function{
-        .description = "User defined function.",
+        .description = ::std::move(doc_string),
         .func = create_function(
-            variadic, unused, arglist, ::std::get<list>(args[2].expr), args[2].pos)
+            variadic, unused, arglist, ::std::get<list>(body.expr), body.pos)
       }
     });
   }
@@ -375,10 +396,10 @@ namespace yl {
     
     ASSERT_ARG_COUNT(args, u.pos, <= 1);
 
-    symbol s{"\n"};
+    string s{"\n"};
 
     if (args.size() == 1) {
-      s +=
+      s.str +=
         "  Hi, welcome to yatsukha's lisp. This is a lisp like intepreted language.\n"
         "  There are only 4 types: numeric, symbol, function and list.\n"
         "  Numeric type is a floating point number such as 1, or 1.25.\n"
@@ -399,9 +420,9 @@ namespace yl {
         "  Enter 'help symbol' to get information about a symbol.\n"
         "  Symbols currently available for inspection:\n";
       for (auto&& sym : *env->curr) {
-        s += "    ";
-        s += sym.first;
-        s += "\n";
+        s.str += "    ";
+        s.str += sym.first;
+        s.str += "\n";
       }
 
       // TODO: convert to string
@@ -412,24 +433,24 @@ namespace yl {
 
     expression expr;
 
-    if (is_symbol(args[1].expr)) {
+    if (is_string(args[1].expr)) {
       auto resolved = resolve_symbol({args[1].pos, args[1].expr}, env); 
       RETURN_IF_ERROR(resolved);
 
-      expr = (*env->curr)[::std::get<symbol>(resolved.value().expr)];
+      expr = (*env->curr)[::std::get<string>(resolved.value().expr).str];
     } else {
       expr = args[1].expr;
     }
 
-    s += "  type: ";
-    s += type_of(expr);
-    s += "\n";
+    s.str += "  type: ";
+    s.str += type_of(expr);
+    s.str += "\n";
 
-    s += "  value: ";
+    s.str += "  value: ";
 
     ::std::stringstream ss;
     ss << expr << "\n";
-    s += ss.str();
+    s.str += ss.str();
     
     return succeed(unit{u.pos, list{true, {unit{
         u.pos, s
@@ -451,8 +472,10 @@ namespace yl {
       return succeed(::std::get<numeric>(a.expr) == ::std::get<numeric>(b.expr));
     }
 
-    if (is_symbol(a.expr)) {
-      return succeed(::std::get<symbol>(a.expr) == ::std::get<symbol>(b.expr));
+    if (is_string(a.expr)) {
+      auto const& sa = ::std::get<string>(a.expr);
+      auto const& sb = ::std::get<string>(b.expr);
+      return succeed(sa.raw == sb.raw && sa.str == sb.str);
     }
 
     if (is_list(a.expr)) {
@@ -531,12 +554,12 @@ namespace yl {
       {"-", function{"Subtracts numbers.", sub_m}},
       {"*", function{"Multiplies numbers.", mul_m}},
       {"/", function{"Divides numbers.", div_m}},
-/*      {"%", function{"Modulo.", mod_m}},
+      {"%", function{"Modulo.", mod_m}},
       {"&", function{"Binary and.", and_m}},
       {"|", function{"Binary or.", or_m}},
       {"^", function{"Binary xor.", xor_m}},
       {"<<", function{"Shift left.", shl_m}},
-      {">>", function{"Shift right.", shr_m}}, */
+      {">>", function{"Shift right.", shr_m}},
       {"eval", function{"Evaluates a Q expression.", eval_m}},
       {"list", function{"Takes arguments and turns them into a Q expression.", list_m}},
       {"head", function{"Takes a Q expression and returns the first subexpression.", head_m}},
@@ -590,12 +613,12 @@ namespace yl {
    */
 
   result_type resolve_symbol(unit const& pu, env_node_ptr node) noexcept {
-    if (!is_symbol(pu.expr)) {
+    if (!is_string(pu.expr)) {
       FAIL_WITH("Expected a symbol.", pu.pos);
     }
 
     auto starting_point = node;
-    auto s = ::std::get<symbol>(pu.expr);
+    auto s = ::std::get<string>(pu.expr).str;
 
     for (;;) {
       while (!(node->curr->count(s))) {
@@ -607,11 +630,11 @@ namespace yl {
 
       auto next = node->curr->operator[](s);
 
-      if (!is_symbol(next)) {
+      if (!is_string(next) || ::std::get<string>(next).raw) {
         return succeed(unit{pu.pos, next});
       }
 
-      s = ::std::get<symbol>(next);
+      s = ::std::get<string>(next).str;
       node = starting_point;
     }
   }
@@ -625,7 +648,11 @@ namespace yl {
       return succeed(pu);
     }
 
-    if (is_symbol(pu.expr)) {
+    if (is_string(pu.expr)) {
+      if (::std::get<string>(pu.expr).raw) {
+        return succeed(pu);
+      }
+
       if (auto rsr = resolve_symbol(pu, node); rsr) {
         return succeed(rsr.value());
       } else {

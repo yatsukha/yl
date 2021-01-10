@@ -14,20 +14,23 @@ namespace yl {
 
   // base types
 
+  struct string {
+    ::std::string str;
+    bool raw = false;
+  };
+
   struct list;
   struct function;
 
   using numeric = ::std::int64_t;
-  using symbol  = ::std::string;
-
-  using expression = ::std::variant<numeric, symbol, list, function>;
+  using expression = ::std::variant<numeric, string, list, function>;
 
   ::std::ostream& operator<<(::std::ostream& out, expression const&) noexcept;
   ::std::string type_of(expression const&) noexcept;
 
   // environment
 
-  using environment = ::std::unordered_map<symbol, expression>;
+  using environment = ::std::unordered_map<decltype(::std::declval<string>().str), expression>;
   using env_ptr     = ::std::shared_ptr<environment>;
 
   struct env_node;

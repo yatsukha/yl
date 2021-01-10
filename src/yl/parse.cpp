@@ -58,8 +58,35 @@ namespace yl {
     return balance;
   }
 
+  result_type parse_raw_string(
+      char const* line, ::std::size_t const line_num, prf curr) noexcept {
+    pos start = curr;
+    string s{.str = {}, .raw = true};
+
+    while (line[curr] != '\"') {
+      if (is_eof(line, curr)) {
+        return fail(error_info{"Unexpected EOF.", {line_num, curr}});
+      }
+
+      if (line[curr] == '\\') {
+        ++curr;
+        if (is_eof(line, curr)) {
+          return fail(error_info{"Unexpected EOF.", {line_num, curr}});
+        }
+      }
+
+      s.str += line[curr++];
+    }
+
+    ++curr;
+    return succeed(unit{{line_num, start}, s});
+  }
+
   result_type parse_terminal(
-      char const* line, ::std::size_t const line_num, prf curr) noexcept { 
+      char const* line, ::std::size_t const line_num, prf curr) noexcept {
+    if (line[curr] == '\"') {
+      return parse_raw_string(line, line_num, ++curr);
+    }
 
     pos const start = curr;
     while (!is_eof(line, curr) && !::std::isblank(line[curr]) 
@@ -67,10 +94,10 @@ namespace yl {
       ++curr;
     }
 
-    symbol s(line + start, line + curr);
+    string s{{line + start, line + curr}};
 
     try {
-      return succeed(unit{{line_num, start}, ::std::stol(s)});
+      return succeed(unit{{line_num, start}, ::std::stol(s.str)});
     } catch (::std::invalid_argument const&) {}
 
     return succeed(
@@ -91,26 +118,22 @@ namespace yl {
 
     while (!is_eof(line, curr) && !right_paren(line[curr])) {
       if (!left_paren(line[curr])) {
-        auto const old = curr;
-
         if (auto res = parse_terminal(line, line_num, curr); res) {
           ls.children.emplace_back(res.value());
-          skip(line, curr);
-          continue;
+        } else {
+          return res;
         }
-
-        curr = old;
-      }
-
-      bool const q = line[curr] == '{';
-      auto closing = q ? '}' : ')';
-
-      if (auto res = parse_expression(line, line_num, ++curr, closing); res) {
-        auto value = res.value();
-        ::std::get<list>(value.expr).q = q;
-        ls.children.push_back(value);
       } else {
-        return res;
+        bool const q = line[curr] == '{';
+        auto closing = q ? '}' : ')';
+
+        if (auto res = parse_expression(line, line_num, ++curr, closing); res) {
+          auto value = res.value();
+          ::std::get<list>(value.expr).q = q;
+          ls.children.push_back(value);
+        } else {
+          return res;
+        }
       }
 
       skip(line, curr);

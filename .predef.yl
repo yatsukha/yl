@@ -1,5 +1,18 @@
-def {fun} (\ {args body} {def (head args) (\ (tail args) body)})
-fun {unpack f xs} {eval (join (list f) xs)}
-fun {pack f & xs} {f xs}
-fun {reverse l} {if (== l {}) {{}} {join (reverse (tail l)) (head l)}}
-fun {repeat n expr} {if (== 0 n) {{}} {cons expr (repeat (- n 1) expr)}}
+# PREDEF, do not touch
+def {fun} (
+  \{args & body} 
+  "Helper function for \\. 'fun {add x y} {+ x y}' defines a function assigned to add. You can add a comment as well: 'fun {add x y} \"My binary add.\" {+ x y}' which will be shown when you enter 'help add'." 
+  {
+    def (head args) (
+      if (== 1 (len body)) {
+        \ (tail args) (eval body)
+      } {
+        \ (tail args) (eval (head body)) (eval (head (tail body)))
+      }
+    )
+ }
+)
+fun {unpack f xs} "Unpacks an expression and applies given function to it. 'unpack + {1 2 3}'." {eval (cons f xs)}
+fun {pack f & xs} "Packs an expression and applies given function to the resulting Q expression. 'pack eval + 1 2 3'" {f xs}
+fun {reverse l} "Reverses a given Q expression. 'eval (reverse {2 1 +})'" {if (== l {}) {{}} {join (reverse (tail l)) (head l)}}
+fun {repeat n expr} "Repeats an expression. 'unpack + (repeat 200 1)'" {if (== 0 n) {{}} {cons expr (repeat (- n 1) expr)}}
