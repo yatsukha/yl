@@ -62,7 +62,8 @@ namespace yl {
 
   struct list {
     bool q = false;
-    ::std::vector<unit> children;
+    using children_type = ::std::vector<unit>;
+    children_type children;
   };
 
   using result_type = either<error_info, unit>;
@@ -77,5 +78,28 @@ namespace yl {
     position pos;
     expression expr;
   };
+
+#define DEF_CAST(type) \
+  inline type& as_##type(expression& expr) noexcept { \
+    return ::std::get<type>(expr); \
+  } \
+  inline type const& as_##type(expression const& expr) noexcept { \
+    return ::std::get<type>(expr); \
+  }
+
+  DEF_CAST(numeric);
+  DEF_CAST(string);
+  DEF_CAST(function);
+  DEF_CAST(list);
+
+#define DEF_TYPE_CHECK(type) \
+  inline bool is_##type(expression const& expr) noexcept { \
+    return ::std::holds_alternative<type>(expr); \
+  }
+
+  DEF_TYPE_CHECK(numeric);
+  DEF_TYPE_CHECK(string);
+  DEF_TYPE_CHECK(function);
+  DEF_TYPE_CHECK(list);
 
 }

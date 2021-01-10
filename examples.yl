@@ -1,4 +1,4 @@
-fun {fib n} {
+fun {fib n} "Calculates the n-th Fibonacci number." {
   if (>= 1 n) {
     1
   } {

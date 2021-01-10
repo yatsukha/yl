@@ -29,19 +29,12 @@ namespace yl {
     FAIL_WITH("Argument count must be " #eq ".", pos) \
   }
 
-
-#define DEF_TYPE_CHECK(type) \
-  inline bool is_##type(expression const& expr) noexcept { \
-    return ::std::holds_alternative<type>(expr); \
-  }
-
-  DEF_TYPE_CHECK(numeric);
-  DEF_TYPE_CHECK(string);
-  DEF_TYPE_CHECK(function);
-  DEF_TYPE_CHECK(list);
-
   bool is_q(unit u) noexcept {
     return is_list(u.expr) && ::std::get<list>(u.expr).q;
+  }
+
+  bool is_raw(unit u) noexcept {
+    return is_string(u.expr) && ::std::get<string>(u.expr).raw;
   }
 
 #define Q_OR_ERROR(unit) \
@@ -50,6 +43,11 @@ namespace yl {
       "Expected a Q expression.", \
        unit.pos \
     });  \
+  }
+
+#define RAW_OR_ERROR(unit) \
+  if (!is_raw(unit)) { \
+    FAIL_WITH("Expected a raw string.", unit.pos); \
   }
 
   /*
@@ -118,60 +116,112 @@ namespace yl {
     });
   }
 
-  result_type head_m(unit operand, env_node_ptr node) noexcept {
-    auto const& args = ::std::get<list>(operand.expr).children;
+  result_type head_m(unit u, env_node_ptr node) noexcept {
+    auto const& args = ::std::get<list>(u.expr).children;
 
-    ASSERT_ARG_COUNT(args, operand.pos, == 1);
+    ASSERT_ARG_COUNT(args, u.pos, == 1);
 
-    if (!is_list(args[1].expr) || !::std::get<list>(args[1].expr).q){
-      FAIL_WITH("Head expects a Q expression as an argument.", args[1].pos);
+    bool q;
+
+    if (!(q = is_q(args[1])) && !is_raw(args[1])) {
+      FAIL_WITH("Head expects a Q expression or a raw string as an argument.", 
+                args[1].pos);
     }
 
-    auto const& ls = ::std::get<list>(args[1].expr);
-
-    if (ls.children.empty()) {
-      FAIL_WITH("Head takes a non-empty Q expression.", args[1].pos);
+    if (q) {
+      auto const& ls = as_list(args[1].expr);
+      auto const empty = ls.children.empty();
+      return succeed(unit{
+        empty ? args[1].pos : ls.children.front().pos,
+        list{
+          true, 
+          empty ? list::children_type{} : list::children_type{ls.children.front()}
+        }
+      });
     }
+
+    auto const& str = as_string(args[1].expr).str;
 
     return succeed(unit{
-      ls.children.front().pos, 
-      list{true, {ls.children.front()}}
+      args[1].pos,
+      string{
+        .str = str.empty() 
+          ? ::std::string{""} 
+          : ::std::string{str.begin(), str.begin() + 1},
+        .raw = true
+      }
     });
   }
 
-  result_type tail_m(unit operand, env_node_ptr node) noexcept {
-    auto const& args = ::std::get<list>(operand.expr).children;
+  result_type tail_m(unit u, env_node_ptr node) noexcept {
+    auto const& args = ::std::get<list>(u.expr).children;
 
-    ASSERT_ARG_COUNT(args, operand.pos, == 1);
-    Q_OR_ERROR(args[1]);
+    ASSERT_ARG_COUNT(args, u.pos, == 1);
 
-    auto const& other = ::std::get<list>(args[1].expr);
+    bool q;
+
+    if (!(q = is_q(args[1])) && !is_raw(args[1])) {
+      FAIL_WITH("Tail expects a Q expression or a raw string as an argument.", 
+                args[1].pos);
+    }
+
+    if (q) {
+      auto const& ls = as_list(args[1].expr);
+      return succeed(unit{
+        args[1].pos,
+        list{
+          true, 
+          {
+            ls.children.begin() + 1, 
+            ls.children.empty() 
+              ? ls.children.begin() + 1
+              : ls.children.end()
+          } 
+        }
+      });
+    }
+
+    auto const& str = as_string(args[1].expr).str;
 
     return succeed(unit{
-      args[1].pos, 
-      list{true, {
-        other.children.begin() + 1, 
-        other.children.empty() ? other.children.begin() + 1 : other.children.end()
-      }}
+      args[1].pos,
+      string{
+      .str = {str.begin() + 1, str.empty() ? str.begin() + 1 : str.end()},
+        .raw = true
+      }
     });
   }
 
-  result_type join_m(unit operand, env_node_ptr node) noexcept {
-    auto const& args = ::std::get<list>(operand.expr).children;
+  result_type join_m(unit u, env_node_ptr node) noexcept {
+    auto const& args = ::std::get<list>(u.expr).children;
 
-    ASSERT_ARG_COUNT(args, operand.pos, >= 1);
+    ASSERT_ARG_COUNT(args, u.pos, >= 1);
 
-    list ret{true};
+    bool q;
 
+    if (!(q = is_q(args[1])) && !is_raw(args[1])) {
+      FAIL_WITH("Tail expects a Q expression or a raw string as an argument.", 
+                args[1].pos);
+    }
+
+    if (q) {
+      auto ret = list{true, {}};
+      for (::std::size_t i = 1; i < args.size(); ++i) {
+        Q_OR_ERROR(args[i]);
+        auto const& other = as_list(args[i].expr);
+        ret.children.insert(ret.children.end(), 
+                            other.children.begin(), other.children.end());
+      }
+      return succeed(unit{u.pos, ::std::move(ret)});
+    }
+
+    ::std::string str;
     for (::std::size_t i = 1; i < args.size(); ++i) {
-      Q_OR_ERROR(args[i]);
-
-      auto const& other = ::std::get<list>(args[i].expr);
-      ret.children.insert(
-        ret.children.end(), other.children.begin(), other.children.end());
+      RAW_OR_ERROR(args[i]);
+      str += as_string(args[i].expr).str;
     }
 
-    return succeed(unit{operand.pos, ret});
+    return succeed(unit{u.pos, string{::std::move(str), true}});
   }
 
   result_type cons_m(unit operand, env_node_ptr node) noexcept {
@@ -191,28 +241,56 @@ namespace yl {
     auto const& args = ::std::get<list>(operand.expr).children;
 
     ASSERT_ARG_COUNT(args, operand.pos, == 1);
-    Q_OR_ERROR(args[1]);
+
+    bool q;
+    if (!(q = is_q(args[1])) && !is_raw(args[1])) {
+      FAIL_WITH("Expected a Q expression or a raw string.", args[1].pos);
+    }
 
     return succeed(unit{
       operand.pos, 
-      numeric(::std::get<list>(args[1].expr).children.size())
+      numeric(q 
+        ? as_list(args[1].expr).children.size() 
+        : as_string(args[1].expr).str.size())
     });
   }
 
-  result_type init_m(unit operand, env_node_ptr node) noexcept {
-    auto const& args = ::std::get<list>(operand.expr).children;
+  result_type init_m(unit u, env_node_ptr node) noexcept {
+    auto const& args = ::std::get<list>(u.expr).children;
 
-    ASSERT_ARG_COUNT(args, operand.pos, == 1);
-    Q_OR_ERROR(args[1]);
+    ASSERT_ARG_COUNT(args, u.pos, == 1);
 
-    auto const& other = ::std::get<list>(args[1].expr);
+    bool q;
+
+    if (!(q = is_q(args[1])) && !is_raw(args[1])) {
+      FAIL_WITH("Tail expects a Q expression or a raw string as an argument.", 
+                args[1].pos);
+    }
+
+    if (q) {
+      auto const& ls = as_list(args[1].expr);
+      return succeed(unit{
+        args[1].pos,
+        list{
+          true, 
+          {
+            ls.children.begin(), 
+            ls.children.empty() 
+              ? ls.children.begin()
+              : ls.children.end() - 1
+          } 
+        }
+      });
+    }
+
+    auto const& str = as_string(args[1].expr).str;
 
     return succeed(unit{
-      args[1].pos, 
-      list{true, {
-        other.children.begin(), 
-        other.children.empty() ? other.children.begin() : other.children.end() - 1
-      }}
+      args[1].pos,
+      string{
+      .str = {str.begin(), str.empty() ? str.begin() : str.end() - 1},
+        .raw = true
+      }
     });
   }
  
@@ -390,13 +468,12 @@ namespace yl {
     });
   }
 
-  // .. abuse :^)
   result_type help_m(unit u, env_node_ptr env) noexcept {
     auto const& args = ::std::get<list>(u.expr).children;
     
     ASSERT_ARG_COUNT(args, u.pos, <= 1);
 
-    string s{"\n"};
+    string s{"\n", true};
 
     if (args.size() == 1) {
       s.str +=
@@ -425,7 +502,6 @@ namespace yl {
         s.str += "\n";
       }
 
-      // TODO: convert to string
       return succeed(unit{u.pos, list{
           true, {unit{u.pos, s}} 
       }});
@@ -452,9 +528,7 @@ namespace yl {
     ss << expr << "\n";
     s.str += ss.str();
     
-    return succeed(unit{u.pos, list{true, {unit{
-        u.pos, s
-    }}}});
+    return succeed(unit{u.pos, s});
   }
 
   /*
@@ -562,12 +636,16 @@ namespace yl {
       {">>", function{"Shift right.", shr_m}},
       {"eval", function{"Evaluates a Q expression.", eval_m}},
       {"list", function{"Takes arguments and turns them into a Q expression.", list_m}},
-      {"head", function{"Takes a Q expression and returns the first subexpression.", head_m}},
-      {"tail", function{"Takes a Q expression and returns it without its 1st element.", tail_m}},
-      {"join", function{"Joins one or more Q expressions.", join_m}},
+      {"head", function{
+        "Takes a Q expression or a raw string and returns the first subexpression.", head_m
+      }},
+      {"tail", function{
+        "Takes a Q expression or a raw string and returns it without its 1st element.", tail_m
+      }},
+      {"join", function{"Joins one or more Q expressions or raw strings.", join_m}},
       {"cons", function{"Appends its first argument to the second Q expression.", cons_m}},
-      {"len", function{"Calculates the length of a Q expression.", len_m}},
-      {"init", function{"Returns a Q expression without it's last element.", init_m}},
+      {"len", function{"Calculates the length of a Q expression or a raw string.", len_m}},
+      {"init", function{"Returns a Q expression or a raw string without it's last element.", init_m}},
       {"def", function{
         "Global assignment to symbols in a Q expression. "
         "For example 'def {a b} 1 2' assigns 1 and 2 to a and b.",
