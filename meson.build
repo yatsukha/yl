@@ -1,7 +1,7 @@
 project('lisp', 'cpp')
 
 executable(
-  'interpeter',
+  'interpreter',
   sources: [
     'src/main.cpp',
     'src/yl/parse.cpp',

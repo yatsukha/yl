@@ -29,11 +29,11 @@ namespace yl {
     FAIL_WITH("Argument count must be " #eq ".", pos) \
   }
 
-  bool is_q(unit u) noexcept {
+  bool is_q(unit const& u) noexcept {
     return is_list(u.expr) && ::std::get<list>(u.expr).q;
   }
 
-  bool is_raw(unit u) noexcept {
+  bool is_raw(unit const& u) noexcept {
     return is_string(u.expr) && ::std::get<string>(u.expr).raw;
   }
 
@@ -56,7 +56,7 @@ namespace yl {
    *
    */
 
-  either<error_info, numeric> numeric_or_error(unit u, env_node_ptr node) noexcept {
+  either<error_info, numeric> numeric_or_error(unit const& u, env_node_ptr node) noexcept {
     if (is_numeric(u.expr)) {
       return succeed(::std::get<numeric>(u.expr));
     }
@@ -65,7 +65,7 @@ namespace yl {
   }
 
 #define ARITHMETIC_OPERATOR(name, operation) \
-  result_type name##_m(unit operand, env_node_ptr node) noexcept { \
+  result_type name##_m(unit const& operand, env_node_ptr const& node) noexcept { \
     auto idx = operand.pos; \
     auto const& args = ::std::get<list>(operand.expr).children; \
     ASSERT_ARG_COUNT(args, idx, >= 1); \
@@ -93,8 +93,8 @@ namespace yl {
   ARITHMETIC_OPERATOR(shl, <<);
   ARITHMETIC_OPERATOR(shr, >>);
 
-  result_type eval_m(unit operand, env_node_ptr node) noexcept {
-    auto const& args = ::std::get<list>(operand.expr).children;
+  result_type eval_m(unit const& operand, env_node_ptr const& node) noexcept {
+    auto const& args = as_list(operand.expr).children;
 
     ASSERT_ARG_COUNT(args, operand.pos, == 1);
     Q_OR_ERROR(args[1]);
@@ -102,7 +102,7 @@ namespace yl {
     return eval(args[1], node, true);
   }
 
-  result_type list_m(unit operand, env_node_ptr node) noexcept {
+  result_type list_m(unit const& operand, env_node_ptr const& node) noexcept {
     auto const& args = ::std::get<list>(operand.expr).children;
 
     ASSERT_ARG_COUNT(args, operand.pos, >= 1);
@@ -116,7 +116,7 @@ namespace yl {
     });
   }
 
-  result_type head_m(unit u, env_node_ptr node) noexcept {
+  result_type head_m(unit const& u, env_node_ptr const& node) noexcept {
     auto const& args = ::std::get<list>(u.expr).children;
 
     ASSERT_ARG_COUNT(args, u.pos, == 1);
@@ -153,7 +153,7 @@ namespace yl {
     });
   }
 
-  result_type tail_m(unit u, env_node_ptr node) noexcept {
+  result_type tail_m(unit const& u, env_node_ptr const& node) noexcept {
     auto const& args = ::std::get<list>(u.expr).children;
 
     ASSERT_ARG_COUNT(args, u.pos, == 1);
@@ -192,7 +192,7 @@ namespace yl {
     });
   }
 
-  result_type join_m(unit u, env_node_ptr node) noexcept {
+  result_type join_m(unit const& u, env_node_ptr const& node) noexcept {
     auto const& args = ::std::get<list>(u.expr).children;
 
     ASSERT_ARG_COUNT(args, u.pos, >= 1);
@@ -224,7 +224,7 @@ namespace yl {
     return succeed(unit{u.pos, string{::std::move(str), true}});
   }
 
-  result_type cons_m(unit operand, env_node_ptr node) noexcept {
+  result_type cons_m(unit const& operand, env_node_ptr const& node) noexcept {
     auto const& args = ::std::get<list>(operand.expr).children;
 
     ASSERT_ARG_COUNT(args, operand.pos, == 2);
@@ -237,7 +237,7 @@ namespace yl {
     return succeed(unit{operand.pos, other});
   }
 
-  result_type len_m(unit operand, env_node_ptr node) noexcept {
+  result_type len_m(unit const& operand, env_node_ptr const& node) noexcept {
     auto const& args = ::std::get<list>(operand.expr).children;
 
     ASSERT_ARG_COUNT(args, operand.pos, == 1);
@@ -255,7 +255,7 @@ namespace yl {
     });
   }
 
-  result_type init_m(unit u, env_node_ptr node) noexcept {
+  result_type init_m(unit const& u, env_node_ptr const& node) noexcept {
     auto const& args = ::std::get<list>(u.expr).children;
 
     ASSERT_ARG_COUNT(args, u.pos, == 1);
@@ -294,7 +294,7 @@ namespace yl {
     });
   }
  
-  result_type def_m(unit u, env_node_ptr node) noexcept {
+  result_type def_m(unit const& u, env_node_ptr const& node) noexcept {
     auto const& args = ::std::get<list>(u.expr).children;
   
     ASSERT_ARG_COUNT(args, u.pos, >= 2);
@@ -313,11 +313,10 @@ namespace yl {
 
     for (::std::size_t i = 0; i < arguments.size(); ++i) {
       if (!is_string(arguments[i].expr)
-          || ::std::get<string>(arguments[i].expr).raw) {
+          || as_string(arguments[i].expr).raw) {
         FAIL_WITH("Unexpected non-symbol in the argument list.", arguments[i].pos);
       }
-
-      (*g_env->curr)[::std::get<string>(arguments[i].expr).str] = args[2 + i].expr;
+      (*g_env->curr)[as_string(arguments[i].expr).str] = args[2 + i].expr;
     }
 
     return succeed(unit{u.pos, list{}});
@@ -325,11 +324,11 @@ namespace yl {
 
   function::type create_function(
     bool const variadic, bool const unused,
-    list const arglist, list const body,
-    position const body_pos,
+    list const& arglist, list const& body,
+    position const& body_pos,
     env_ptr self_env = {}
   ) noexcept {
-    return [=](unit u, env_node_ptr private_env) mutable -> result_type {
+    return [=](unit const& u, env_node_ptr const& private_env) mutable -> result_type {
       auto const& arguments = ::std::get<list>(u.expr).children;
       if (!variadic && arglist.children.size() < arguments.size() - 1) {
         FAIL_WITH(
@@ -379,7 +378,7 @@ namespace yl {
       if (partial) {
         return succeed(unit{body_pos, function{
           .description = "User defined partially evaluated function.",
-          .func = [=](unit nested_u, env_node_ptr nested_env) -> result_type {
+          .func = [=](unit const& nested_u, env_node_ptr const& nested_env) -> result_type {
             return create_function(
               false, false, 
               {
@@ -408,8 +407,8 @@ namespace yl {
     };
   }
 
-  result_type lambda_m(unit u, env_node_ptr node) noexcept {
-    auto const& args = ::std::get<list>(u.expr).children;
+  result_type lambda_m(unit const& u, env_node_ptr const& node) noexcept {
+    auto const& args = as_list(u.expr).children;
 
     ASSERT_ARG_COUNT(args, u.pos, >= 2);
     ASSERT_ARG_COUNT(args, u.pos, <= 3);
@@ -428,7 +427,7 @@ namespace yl {
       Q_OR_ERROR(args[2]);
     }
 
-    auto const arglist = ::std::get<list>(args[1].expr);
+    auto const& arglist = ::std::get<list>(args[1].expr);
 
     bool variadic = arglist.children.size() == 0;
     bool unused   = variadic;
@@ -468,7 +467,7 @@ namespace yl {
     });
   }
 
-  result_type help_m(unit u, env_node_ptr env) noexcept {
+  result_type help_m(unit const& u, env_node_ptr const& env) noexcept {
     auto const& args = ::std::get<list>(u.expr).children;
     
     ASSERT_ARG_COUNT(args, u.pos, <= 1);
@@ -562,7 +561,7 @@ namespace yl {
     FAIL_WITH("Function comparison is unsupported.", a.pos);
   }
 
-  result_type equal_m(unit u, env_node_ptr env) noexcept {
+  result_type equal_m(unit const& u, env_node_ptr const& env) noexcept {
     auto const& args = ::std::get<list>(u.expr).children;
     ASSERT_ARG_COUNT(args, u.pos, == 2);
     auto ret = args[1] == args[2];
@@ -571,14 +570,14 @@ namespace yl {
   }
 
 
-  result_type not_equal_m(unit u, env_node_ptr env) noexcept {
+  result_type not_equal_m(unit const& u, env_node_ptr const& env) noexcept {
     auto ret = equal_m(u, env);
     RETURN_IF_ERROR(ret);
     return succeed(unit{u.pos, !::std::get<numeric>(ret.value().expr)});;
   }
 
 #define SIMPLE_ORDERING(name, op) \
-  result_type name##_m(unit u, env_node_ptr env) noexcept { \
+  result_type name##_m(unit const& u, env_node_ptr const& env) noexcept { \
     auto const& args = ::std::get<list>(u.expr).children; \
     ASSERT_ARG_COUNT(args, u.pos, == 2); \
     if (args[1].expr.index() != args[1].expr.index() \
@@ -595,7 +594,7 @@ namespace yl {
   SIMPLE_ORDERING(less_or_equal, <=);
   SIMPLE_ORDERING(greater_or_equal, >=);
 
-  result_type if_m(unit u, env_node_ptr env) noexcept {
+  result_type if_m(unit const& u, env_node_ptr const& env) noexcept {
     auto const& args = ::std::get<list>(u.expr).children;
 
     ASSERT_ARG_COUNT(args, u.pos, >= 2);
@@ -747,7 +746,6 @@ namespace yl {
 
       if (ls.children.empty()) {
         return succeed(pu);
-        //FAIL_WITH("Expected a non-empty expression.", pu.pos);
       }
       
       for (auto& child : ls.children) {

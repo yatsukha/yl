@@ -30,6 +30,8 @@ namespace yl {
 
   // environment
 
+  struct unit;
+
   using environment = ::std::unordered_map<decltype(::std::declval<string>().str), expression>;
   using env_ptr     = ::std::shared_ptr<environment>;
 
@@ -69,7 +71,7 @@ namespace yl {
   using result_type = either<error_info, unit>;
 
   struct function {
-    using type = ::std::function<result_type(unit, env_node_ptr)>;
+    using type = ::std::function<result_type(unit const&, env_node_ptr const&)>;
     ::std::string description;
     type func;
   };
