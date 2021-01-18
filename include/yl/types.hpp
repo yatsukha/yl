@@ -71,7 +71,7 @@ namespace yl {
   using result_type = either<error_info, unit>;
 
   struct function {
-    using type = ::std::function<result_type(unit const&, env_node_ptr const&)>;
+    using type = ::std::function<result_type(unit const&, env_node_ptr&)>;
     ::std::string description;
     type func;
   };

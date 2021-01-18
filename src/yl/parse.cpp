@@ -4,6 +4,7 @@
 #include <variant>
 #include <cctype>
 #include <memory>
+#include <unordered_map>
 
 #include <yl/either.hpp>
 #include <yl/util.hpp>
@@ -60,6 +61,14 @@ namespace yl {
 
   result_type parse_raw_string(
       char const* line, ::std::size_t const line_num, prf curr) noexcept {
+    ::std::unordered_map<char, char> const static escaped{
+      {'n', '\n'}, 
+      {'t', '\t'}, 
+      {'r', '\t'}, 
+      {'v', '\v'}
+    };
+
+
     pos start = curr;
     string s{.str = {}, .raw = true};
 
@@ -73,9 +82,13 @@ namespace yl {
         if (is_eof(line, curr)) {
           return fail(error_info{"Unexpected EOF.", {line_num, curr}});
         }
+        if (auto const iter = escaped.find(line[curr++]); iter != escaped.end()) {
+          s.str += iter->second;
+        }
+      } else {
+        s.str += line[curr++];
       }
-
-      s.str += line[curr++];
+       
     }
 
     ++curr;

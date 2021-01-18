@@ -2,9 +2,11 @@
 #include "yl/types.hpp"
 #include <cstdlib>
 #include <debug/assertions.h>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <sstream>
+#include <string>
 #include <unordered_map>
 #include <cmath>
 
@@ -65,7 +67,7 @@ namespace yl {
   }
 
 #define ARITHMETIC_OPERATOR(name, operation) \
-  result_type name##_m(unit const& operand, env_node_ptr const& node) noexcept { \
+  result_type name##_m(unit const& operand, env_node_ptr& node) noexcept { \
     auto idx = operand.pos; \
     auto const& args = ::std::get<list>(operand.expr).children; \
     ASSERT_ARG_COUNT(args, idx, >= 1); \
@@ -93,7 +95,7 @@ namespace yl {
   ARITHMETIC_OPERATOR(shl, <<);
   ARITHMETIC_OPERATOR(shr, >>);
 
-  result_type eval_m(unit const& operand, env_node_ptr const& node) noexcept {
+  result_type eval_m(unit const& operand, env_node_ptr& node) noexcept {
     auto const& args = as_list(operand.expr).children;
 
     ASSERT_ARG_COUNT(args, operand.pos, == 1);
@@ -102,7 +104,7 @@ namespace yl {
     return eval(args[1], node, true);
   }
 
-  result_type list_m(unit const& operand, env_node_ptr const& node) noexcept {
+  result_type list_m(unit const& operand, env_node_ptr& node) noexcept {
     auto const& args = ::std::get<list>(operand.expr).children;
 
     ASSERT_ARG_COUNT(args, operand.pos, >= 1);
@@ -116,7 +118,7 @@ namespace yl {
     });
   }
 
-  result_type head_m(unit const& u, env_node_ptr const& node) noexcept {
+  result_type head_m(unit const& u, env_node_ptr& node) noexcept {
     auto const& args = ::std::get<list>(u.expr).children;
 
     ASSERT_ARG_COUNT(args, u.pos, == 1);
@@ -153,7 +155,7 @@ namespace yl {
     });
   }
 
-  result_type tail_m(unit const& u, env_node_ptr const& node) noexcept {
+  result_type tail_m(unit const& u, env_node_ptr& node) noexcept {
     auto const& args = ::std::get<list>(u.expr).children;
 
     ASSERT_ARG_COUNT(args, u.pos, == 1);
@@ -192,7 +194,44 @@ namespace yl {
     });
   }
 
-  result_type join_m(unit const& u, env_node_ptr const& node) noexcept {
+  result_type last_m(unit const& u, env_node_ptr& node) noexcept {
+    auto const& args = ::std::get<list>(u.expr).children;
+
+    ASSERT_ARG_COUNT(args, u.pos, == 1);
+
+    bool q;
+
+    if (!(q = is_q(args[1])) && !is_raw(args[1])) {
+      FAIL_WITH("Head expects a Q expression or a raw string as an argument.", 
+                args[1].pos);
+    }
+
+    if (q) {
+      auto const& ls = as_list(args[1].expr);
+      auto const empty = ls.children.empty();
+      return succeed(unit{
+        empty ? args[1].pos : ls.children.back().pos,
+        list{
+          true, 
+          empty ? list::children_type{} : list::children_type{ls.children.back()}
+        }
+      });
+    }
+
+    auto const& str = as_string(args[1].expr).str;
+
+    return succeed(unit{
+      args[1].pos,
+      string{
+        .str = str.empty() 
+          ? ::std::string{""} 
+          : ::std::string{str.end() - 1, str.end()},
+        .raw = true
+      }
+    });
+  }
+
+  result_type join_m(unit const& u, env_node_ptr& node) noexcept {
     auto const& args = ::std::get<list>(u.expr).children;
 
     ASSERT_ARG_COUNT(args, u.pos, >= 1);
@@ -224,7 +263,7 @@ namespace yl {
     return succeed(unit{u.pos, string{::std::move(str), true}});
   }
 
-  result_type cons_m(unit const& operand, env_node_ptr const& node) noexcept {
+  result_type cons_m(unit const& operand, env_node_ptr& node) noexcept {
     auto const& args = ::std::get<list>(operand.expr).children;
 
     ASSERT_ARG_COUNT(args, operand.pos, == 2);
@@ -237,7 +276,7 @@ namespace yl {
     return succeed(unit{operand.pos, other});
   }
 
-  result_type len_m(unit const& operand, env_node_ptr const& node) noexcept {
+  result_type len_m(unit const& operand, env_node_ptr& node) noexcept {
     auto const& args = ::std::get<list>(operand.expr).children;
 
     ASSERT_ARG_COUNT(args, operand.pos, == 1);
@@ -255,7 +294,7 @@ namespace yl {
     });
   }
 
-  result_type init_m(unit const& u, env_node_ptr const& node) noexcept {
+  result_type init_m(unit const& u, env_node_ptr& node) noexcept {
     auto const& args = ::std::get<list>(u.expr).children;
 
     ASSERT_ARG_COUNT(args, u.pos, == 1);
@@ -294,7 +333,7 @@ namespace yl {
     });
   }
  
-  result_type def_m(unit const& u, env_node_ptr const& node) noexcept {
+  result_type def_m(unit const& u, env_node_ptr& node) noexcept {
     auto const& args = ::std::get<list>(u.expr).children;
   
     ASSERT_ARG_COUNT(args, u.pos, >= 2);
@@ -322,13 +361,39 @@ namespace yl {
     return succeed(unit{u.pos, list{}});
   }
 
+  result_type assignment_m(unit const& u, env_node_ptr& node) noexcept {
+    auto const& args = ::std::get<list>(u.expr).children;
+  
+    ASSERT_ARG_COUNT(args, u.pos, >= 2);
+    Q_OR_ERROR(args[1]);
+
+    auto const& arguments = ::std::get<list>(args[1].expr).children;
+
+    if (arguments.size() != args.size() - 2) {
+      FAIL_WITH(
+        "Differing length of arguments and corresponding assignments.",
+        u.pos
+      );
+    }
+
+    for (::std::size_t i = 0; i < arguments.size(); ++i) {
+      if (!is_string(arguments[i].expr)
+          || as_string(arguments[i].expr).raw) {
+        FAIL_WITH("Unexpected non-symbol in the argument list.", arguments[i].pos);
+      }
+      (*node->curr)[as_string(arguments[i].expr).str] = args[2 + i].expr;
+    }
+
+    return succeed(unit{u.pos, list{}});
+  }
+
   function::type create_function(
     bool const variadic, bool const unused,
     list const& arglist, list const& body,
     position const& body_pos,
     env_ptr self_env = {}
   ) noexcept {
-    return [=](unit const& u, env_node_ptr const& private_env) mutable -> result_type {
+    return [=](unit const& u, env_node_ptr& private_env) mutable -> result_type {
       auto const& arguments = ::std::get<list>(u.expr).children;
       if (!variadic && arglist.children.size() < arguments.size() - 1) {
         FAIL_WITH(
@@ -378,7 +443,7 @@ namespace yl {
       if (partial) {
         return succeed(unit{body_pos, function{
           .description = "User defined partially evaluated function.",
-          .func = [=](unit const& nested_u, env_node_ptr const& nested_env) -> result_type {
+          .func = [=](unit const& nested_u, env_node_ptr& nested_env) -> result_type {
             return create_function(
               false, false, 
               {
@@ -407,7 +472,7 @@ namespace yl {
     };
   }
 
-  result_type lambda_m(unit const& u, env_node_ptr const& node) noexcept {
+  result_type lambda_m(unit const& u, env_node_ptr& node) noexcept {
     auto const& args = as_list(u.expr).children;
 
     ASSERT_ARG_COUNT(args, u.pos, >= 2);
@@ -467,7 +532,7 @@ namespace yl {
     });
   }
 
-  result_type help_m(unit const& u, env_node_ptr const& env) noexcept {
+  result_type help_m(unit const& u, env_node_ptr& env) noexcept {
     auto const& args = ::std::get<list>(u.expr).children;
     
     ASSERT_ARG_COUNT(args, u.pos, <= 1);
@@ -561,7 +626,7 @@ namespace yl {
     FAIL_WITH("Function comparison is unsupported.", a.pos);
   }
 
-  result_type equal_m(unit const& u, env_node_ptr const& env) noexcept {
+  result_type equal_m(unit const& u, env_node_ptr& env) noexcept {
     auto const& args = ::std::get<list>(u.expr).children;
     ASSERT_ARG_COUNT(args, u.pos, == 2);
     auto ret = args[1] == args[2];
@@ -570,14 +635,14 @@ namespace yl {
   }
 
 
-  result_type not_equal_m(unit const& u, env_node_ptr const& env) noexcept {
+  result_type not_equal_m(unit const& u, env_node_ptr& env) noexcept {
     auto ret = equal_m(u, env);
     RETURN_IF_ERROR(ret);
     return succeed(unit{u.pos, !::std::get<numeric>(ret.value().expr)});;
   }
 
 #define SIMPLE_ORDERING(name, op) \
-  result_type name##_m(unit const& u, env_node_ptr const& env) noexcept { \
+  result_type name##_m(unit const& u, env_node_ptr& env) noexcept { \
     auto const& args = ::std::get<list>(u.expr).children; \
     ASSERT_ARG_COUNT(args, u.pos, == 2); \
     if (args[1].expr.index() != args[1].expr.index() \
@@ -594,7 +659,7 @@ namespace yl {
   SIMPLE_ORDERING(less_or_equal, <=);
   SIMPLE_ORDERING(greater_or_equal, >=);
 
-  result_type if_m(unit const& u, env_node_ptr const& env) noexcept {
+  result_type if_m(unit const& u, env_node_ptr& env) noexcept {
     auto const& args = ::std::get<list>(u.expr).children;
 
     ASSERT_ARG_COUNT(args, u.pos, >= 2);
@@ -606,20 +671,37 @@ namespace yl {
       FAIL_WITH("Expected a numeric value.", u.pos);
     }
 
-    Q_OR_ERROR(args[2]);
-    if (has_else) {
-      Q_OR_ERROR(args[3]);
-    }
-
     if (!::std::get<numeric>(args[1].expr)) {
       if (has_else) {
         return eval(args[3], env, true);
       }
-      return eval(unit{u.pos, list{.q = false, .children = {}}});
+      return eval(unit{u.pos, list{.q = true, .children = {}}});
     } else {
       return eval(args[2], env, true);
     }
   }
+
+  result_type readlines_m(unit const& u, env_node_ptr& env) noexcept {
+    auto const& args = as_list(u.expr).children;
+    ASSERT_ARG_COUNT(args, u.pos, == 1);
+    RAW_OR_ERROR(args[1]);
+
+    ::std::ifstream in{as_string(args[1].expr).str};
+
+    if (!in.is_open()) {
+      FAIL_WITH("Unable to open given file.", args[1].pos);
+    }
+
+    list lines{.q = true};
+
+    ::std::string line;
+    while (::std::getline(in, line)) {
+      lines.children.push_back(unit{args[1].pos, string{::std::move(line), true}});  
+    }
+
+    return succeed(unit{args[1].pos, ::std::move(lines)});
+  }
+
    
   env_node_ptr global_environment() noexcept {
     auto static g_env = ::std::make_shared<environment>(environment{
@@ -641,6 +723,10 @@ namespace yl {
       {"tail", function{
         "Takes a Q expression or a raw string and returns it without its 1st element.", tail_m
       }},
+      {"last", function{
+        "Takes a Q expression or a raw string and returns its last element.",
+        last_m
+      }},
       {"join", function{"Joins one or more Q expressions or raw strings.", join_m}},
       {"cons", function{"Appends its first argument to the second Q expression.", cons_m}},
       {"len", function{"Calculates the length of a Q expression or a raw string.", len_m}},
@@ -649,6 +735,11 @@ namespace yl {
         "Global assignment to symbols in a Q expression. "
         "For example 'def {a b} 1 2' assigns 1 and 2 to a and b.",
         def_m
+      }},
+      {"=", function{
+        "Local assignment to symbols in a Q expression. "
+          "'= {x} 1' assigns 1 to x in a local scope.",
+        assignment_m
       }},
       {"\\", function{
         "Lambda function, takes a Q expression argument list, "
@@ -675,6 +766,10 @@ namespace yl {
         "Otherwise, if it exists, it executes the second Q expression.",
         if_m
       }},
+      {"readlines", function{
+        "Returns a Q expression of lines from a file.",
+        readlines_m
+      }}
     });
 
     return ::std::make_shared<env_node>(env_node{
