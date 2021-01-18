@@ -87,4 +87,10 @@ For more information refer to `help`.
 
 ## Performance
 
-Aproximately 10^7 operations per second on a single core of a 3.5GHz CPU. Tested using fibonacci.
+Aproximately 10^6 operations per second on a single core of a 3.5GHz CPU. Tested by recursively calculating the 26th fibonacci number which is aproximately 1.618^26 ~ 210k operations.
+
+Optimization of the intepreter went as follows (assisted by perf):
+  1. Everything was written using value based semantics, without pointers, every function took a copy of an expression.
+  2. Functions were rewritten to use references instead of copy. This yielded very small performance gains. Obviously the ompiler was very good at optimizing value based arguments passing.
+  3. The main bottleneck after 2. was returning copies of expressions, which mostly revolved around copying lists with __heavy__ children. I rewrote everything so that a single pool resource is used with shared pointers, this resulted in at least a 4x speedup.
+  4. The program still spent a large amount of its runtime indexing into an unordered hash table with a string. I somewhat mitigated this by having a really fast and dumb hash function that just xors the first two chars in the string. 
