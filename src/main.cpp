@@ -66,7 +66,7 @@ namespace yl {
       return;
     }
 
-    std_out << eval_expr.value().expr; 
+    std_out << eval_expr.value()->expr; 
   }
 
   // true if eof

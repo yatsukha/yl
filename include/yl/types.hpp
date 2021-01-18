@@ -14,9 +14,11 @@
 namespace yl {
 
   // base types
+  
+  using string_representation = ::std::pmr::string;
 
   struct string {
-    ::std::string str;
+    string_representation str{&mem_pool};
     bool raw = false;
   };
 
@@ -34,8 +36,21 @@ namespace yl {
   struct unit;
   using unit_ptr = ::std::shared_ptr<unit>;
 
+  struct str_hasher {
+    ::std::size_t operator()(string_representation const& str) const noexcept {
+      switch (str.size()) {
+        case 0:
+          return 0;
+        case 1:
+          return str[0];
+        default:
+          return str[0] ^ str[1];
+      }
+    }
+  };
+
   using environment = 
-    ::std::pmr::unordered_map<decltype(::std::declval<string>().str), unit_ptr>;
+    ::std::pmr::unordered_map<string_representation, unit_ptr, str_hasher>;
   using env_ptr = ::std::shared_ptr<environment>;
 
   struct env_node;
@@ -71,11 +86,11 @@ namespace yl {
     children_type children{&mem_pool};
   };
 
-  using result_type = either<error_info, unit>;
+  using result_type = either<error_info, unit_ptr>;
 
   struct function {
-    using type = ::std::function<result_type(unit const&, env_node_ptr&)>;
-    ::std::string description;
+    using type = ::std::function<result_type(unit_ptr const&, env_node_ptr&)>;
+    string_representation description;
     type func;
   };
 

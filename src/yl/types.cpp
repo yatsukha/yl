@@ -20,7 +20,7 @@ namespace yl {
         for (::std::size_t i = 0; i < ls.children.size(); ++i) {
           if (i)
             out << " ";
-          out << ls.children[i].expr;
+          out << ls.children[i]->expr;
         }
         out << (ls.q ? "}" : ")");
       }

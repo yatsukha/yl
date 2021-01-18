@@ -9,6 +9,7 @@
 #include <yl/either.hpp>
 #include <yl/util.hpp>
 #include <yl/parse.hpp>
+#include <yl/mem.hpp>
 
 namespace yl {
 
@@ -70,7 +71,8 @@ namespace yl {
 
 
     pos start = curr;
-    string s{.str = {}, .raw = true};
+    string s;
+    s.raw = true;
 
     while (line[curr] != '\"') {
       if (is_eof(line, curr)) {
@@ -92,7 +94,7 @@ namespace yl {
     }
 
     ++curr;
-    return succeed(unit{{line_num, start}, s});
+    return succeed(make_shared(unit{{line_num, start}, s}));
   }
 
   result_type parse_terminal(
@@ -110,12 +112,14 @@ namespace yl {
     string s{{line + start, line + curr}};
 
     try {
-      return succeed(unit{{line_num, start}, ::std::stol(s.str)});
+      return succeed(make_shared<unit>(
+        unit{{line_num, start}, ::std::stol(s.str.c_str())}
+      ));
     } catch (::std::invalid_argument const&) {}
 
-    return succeed(
+    return succeed(make_shared(
       unit{{line_num, start}, s}
-    );
+    ));
   }
 
   result_type parse_expression(
@@ -142,7 +146,7 @@ namespace yl {
 
         if (auto res = parse_expression(line, line_num, ++curr, closing); res) {
           auto value = res.value();
-          ::std::get<list>(value.expr).q = q;
+          as_list(value->expr).q = q;
           ls.children.push_back(value);
         } else {
           return res;
@@ -168,7 +172,7 @@ namespace yl {
     }
 
     expr.expr = ::std::move(ls); 
-    return succeed(expr);
+    return succeed(make_shared(::std::move(expr)));
   }
 
   result_type parse(char const* line, ::std::size_t const line_num) noexcept {
