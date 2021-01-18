@@ -16,6 +16,7 @@
 #include <yl/eval.hpp>
 #include <yl/util.hpp>
 #include <yl/types.hpp>
+#include <yl/mem.hpp>
 
 namespace yl {
 

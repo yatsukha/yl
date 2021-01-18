@@ -9,6 +9,7 @@
 #include <memory>
 
 #include <yl/either.hpp>
+#include <yl/mem.hpp>
 
 namespace yl {
 
@@ -31,9 +32,11 @@ namespace yl {
   // environment
 
   struct unit;
+  using unit_ptr = ::std::shared_ptr<unit>;
 
-  using environment = ::std::unordered_map<decltype(::std::declval<string>().str), expression>;
-  using env_ptr     = ::std::shared_ptr<environment>;
+  using environment = 
+    ::std::pmr::unordered_map<decltype(::std::declval<string>().str), unit_ptr>;
+  using env_ptr = ::std::shared_ptr<environment>;
 
   struct env_node;
 
@@ -64,8 +67,8 @@ namespace yl {
 
   struct list {
     bool q = false;
-    using children_type = ::std::vector<unit>;
-    children_type children;
+    using children_type = ::std::pmr::vector<unit_ptr>;
+    children_type children{&mem_pool};
   };
 
   using result_type = either<error_info, unit>;
