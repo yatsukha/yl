@@ -31,9 +31,9 @@ namespace yl {
     if (past || continuated) {
       auto** list = ::history_list();
       if (past) {
-        ::std::cout << past << " entries ago:" << "\n";
+        std_err << past << " entries ago:" << "\n";
       }
-      ::std::cout << list[err.pos.line]->line << "\n";
+      std_err << list[err.pos.line]->line << "\n";
     }
 
     for (::std::size_t i = 0; 
