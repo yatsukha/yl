@@ -59,26 +59,23 @@ $ ./interpreter
 yatsukha's lisp
 ^C to exit, 'help' to get started
 detected predef at '.predef.yl', reading...
-yl> fun {** base exponent} { unpack * (repeat exponent base) }
+yl> fun {** base exponent} {unpack * (repeat exponent base)}
 ()
 yl> ** 2 4
 16
-yl> help **
-"
-function:
-User defined function.
-"
-yl> fun {** base exponent} "Pow function." { unpack * (repeat exponent base) }
+yl> def {binary-pow} (** 2)
 ()
-yl> help **
+yl> binary-pow 4
+16
+yl> help def
 "
 function:
-Pow function.
+Defines a global variable. 'def {a b} 1 2' assigns 1 and 2 to a and b.
 "
-yl> help fun
+yl> help binary-pow
 "
 function:
-Helper function for . 'fun {add x y} {+ x y}' defines a function assigned to add. You can add a comment as well: 'fun {add x y} My binary add. {+ x y}' which will be shown when you enter 'help add'.
+User defined partially evaluated function.
 "
 yl>
 ```
