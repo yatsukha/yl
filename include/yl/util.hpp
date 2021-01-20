@@ -1,11 +1,14 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdlib>
 #include <sstream>
 #include <string>
 #include <utility>
 #include <iostream>
 #include <variant>
+
+#include <yl/mem.hpp>
 
 namespace yl {
   
@@ -25,10 +28,10 @@ namespace yl {
   }
 
   template<typename... Args>
-  ::std::string concat(Args&& ...args) noexcept {
-    ::std::stringstream ss;
+  string_representation concat(Args&& ...args) noexcept {
+    ::std::stringstream ss; // C++20 when
     detail::cat(ss, ::std::forward<Args>(args)...);
-    return ss.str();
+    return string_representation{ss.str(), &mem_pool};
   }
 
   template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };

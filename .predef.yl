@@ -12,7 +12,18 @@ def {fun} (
     )
  }
 )
+
 fun {unpack f xs} "Unpacks an expression and applies given function to it. 'unpack + {1 2 3}'." {eval (cons f xs)}
+
 fun {pack f & xs} "Packs an expression and applies given function to the resulting Q expression. 'pack eval + 1 2 3'" {f xs}
+
 fun {reverse l} "Reverses a given Q expression. 'eval (reverse {2 1 +})'" {if (== l {}) {{}} {join (reverse (tail l)) (head l)}}
+
 fun {repeat n expr} "Repeats an expression. 'unpack + (repeat 200 1)'" {if (== 0 n) {{}} {cons expr (repeat (- n 1) expr)}}
+
+fun {do & actions} "Executes several actions in a row. Returns the value of the last action." {
+  if (!= {} actions) { eval (last actions) }
+}
+
+fun {let body} "Opens up a new scope." { (\{} body) }
+

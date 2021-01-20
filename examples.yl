@@ -1,9 +1,5 @@
 fun {fib n} "Calculates the n-th Fibonacci number." {
-  if (>= 1 n) {
-    1
-  } {
-    + (fib (- n 1)) (fib (- n 2))
-  }
+  if (<= n 1) n {+ (fib (- n 1)) (fib (- n 2))}
 }
 
-fib 23
+fib 25

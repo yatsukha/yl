@@ -1,14 +1,6 @@
 #pragma once
 
-#include "yl/types.hpp"
-#include "yl/util.hpp"
-#include <string>
-#include <functional>
-#include <utility>
-#include <variant>
-
-#include <yl/parse.hpp>
-#include <yl/either.hpp>
+#include <yl/types.hpp>
 
 namespace yl {
 

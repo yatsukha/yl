@@ -156,7 +156,7 @@ namespace yl {
   template<typename S, typename SS = ::std::remove_reference_t<S>>
   inline either<void, SS> succeed(S s) noexcept {
     either<void, SS> e{false};
-    new (e.data) SS{s};
+    new (e.data) SS{::std::move(s)};
     return e;
   }    
 
