@@ -65,7 +65,7 @@ namespace yl {
       {'n', '\n'}, 
       {'t', '\t'}, 
       {'r', '\t'}, 
-      {'v', '\v'}
+      {'v', '\v'},
     };
 
 
@@ -83,13 +83,16 @@ namespace yl {
         if (is_eof(line, curr)) {
           return fail(error_info{"Unexpected EOF.", {line_num, curr}});
         }
-        if (auto const iter = escaped.find(line[curr++]); iter != escaped.end()) {
+        if (auto const iter = escaped.find(line[curr]); iter != escaped.end()) {
           s.str += iter->second;
+        } else {
+          s.str += line[curr];
         }
       } else {
-        s.str += line[curr++];
+        s.str += line[curr];
       }
-       
+
+      ++curr;
     }
 
     ++curr;
