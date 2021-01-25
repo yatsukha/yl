@@ -1,3 +1,4 @@
+#include <cctype>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -69,6 +70,27 @@ namespace yl {
     std_out << eval_expr.value()->expr; 
   }
 
+  namespace detail {
+
+    // true if empty
+    bool preproccess(char* line) {
+      bool empty = true;
+      ::std::size_t idx = 0;
+      while (line[idx]) {
+        if (line[idx] == ';') {
+          line[idx] = 0;
+          return empty;
+        }
+
+        empty = empty && ::std::isblank(line[idx]);
+        ++idx;
+      }
+
+      return empty;
+    }
+
+  }
+
   // true if eof
   bool handle_line(
     ::std::function<char*()> line_supplier, 
@@ -86,7 +108,7 @@ namespace yl {
       return true;
     }
 
-    if (!input[0] || input[0] == '#') {
+    if (::yl::detail::preproccess(input)) {
       ::free(input);
       return false;
     }

@@ -1,7 +1,10 @@
 #pragma once
 
+#include "yl/mem.hpp"
+#include <algorithm>
 #include <fstream>
 
+#include <stdexcept>
 #include <yl/types.hpp>
 #include <yl/eval.hpp>
 #include <yl/macros.hpp>
@@ -24,14 +27,15 @@ namespace yl {
 #define Q_OR_ERROR(unit_ptr) \
   if (!is_q(unit_ptr)) {\
     return fail(error_info{ \
-      "Expected a Q expression.", \
+      concat("Expected a Q expression got ", type_of(unit_ptr->expr), "."), \
        unit_ptr->pos \
     });  \
   }
 
 #define RAW_OR_ERROR(unit_ptr) \
   if (!is_raw(unit_ptr)) { \
-    FAIL_WITH("Expected a raw string.", unit_ptr->pos); \
+    FAIL_WITH(concat("Expected a raw string got ", type_of(unit_ptr->expr), "."), \
+              unit_ptr->pos); \
   }
 
   inline either<error_info, numeric> numeric_or_error(unit_ptr const& u) noexcept {
@@ -39,7 +43,7 @@ namespace yl {
       return succeed(as_numeric(u->expr));
     }
 
-    FAIL_WITH("Expected a numeric value.", u->pos);
+    FAIL_WITH(concat("Expected a numeric value got ", type_of(u->expr), "."), u->pos);
   }
 
 #define ARITHMETIC_OPERATOR(name, operation) \
@@ -261,6 +265,51 @@ namespace yl {
     other.children.insert(other.children.begin(), args[1]);
 
     SUCCEED_WITH(u->pos, ::std::move(other));
+  }
+
+  inline result_type at_m(unit_ptr const& u, env_node_ptr& node) noexcept {
+    auto const& args = as_list(u->expr).children;
+
+    ASSERT_ARG_COUNT(u, == 2);
+
+    if (!is_numeric(args[2]->expr)) {
+      FAIL_WITH("Expected an index.", args[2]->pos);
+    }
+
+    auto const idx = as_numeric(args[2]->expr);
+
+    if (idx < 0) {
+      FAIL_WITH("Expected a non negative number.", args[2]->pos);
+    }
+
+    bool q;
+    if (!(q = is_q(args[1])) && !is_raw(args[1])) {
+      FAIL_WITH("Expected a Q expression or a raw string.", args[1]->pos);
+    }
+
+
+    if (q) {
+      auto const& ls = as_list(args[1]->expr).children;
+      if (static_cast<::std::size_t>(idx) >= ls.size()) {
+        FAIL_WITH(concat("Index ", idx, " is out of bounds."),  
+                  args[2]->pos);
+      }
+
+      list ret{.q = true};
+      ret.children.push_back(ls[idx]);
+
+      SUCCEED_WITH(u->pos, ret);
+    }
+
+    auto const& str = as_string(args[1]->expr).str;
+    if (static_cast<::std::size_t>(idx) >= str.length()) {
+      FAIL_WITH(concat("Index ", idx, " is out of bounds."), 
+                args[2]->pos);
+    }
+    string ret{.raw = true};
+    ret.str += str[idx];
+
+    SUCCEED_WITH(u->pos, ret);
   }
 
   inline result_type len_m(unit_ptr const& u, env_node_ptr& node) noexcept {
@@ -503,6 +552,7 @@ namespace yl {
         "  Function is a resolved symbol that represents a computation,\n"
         "  it can be created using '\\', see 'help \\'.\n"
         "  Functions support partial evaluation.\n"
+        "  Everything after and including ; is considered a commment.\n"
         "\n"
         "  Examples: \n"
         "  (+ 1 2)\n"
@@ -555,7 +605,7 @@ namespace yl {
     }
 
     if (a->expr.index() != b->expr.index()) {
-      SUCCEED_WITH(a->pos, true);
+      SUCCEED_WITH(a->pos, false);
     }
 
     if (is_numeric(a->expr)) {
@@ -598,7 +648,7 @@ namespace yl {
   inline result_type name##_m(unit_ptr const& u, env_node_ptr& env) noexcept { \
     auto const& args = as_list(u->expr).children; \
     ASSERT_ARG_COUNT(u, == 2); \
-    if (args[1]->expr.index() != args[1]->expr.index() \
+    if (args[1]->expr.index() != args[2]->expr.index() \
         || !is_numeric(args[1]->expr)) { \
       FAIL_WITH("Expected two numeric arguments", u->pos);  \
     } \
@@ -634,6 +684,69 @@ namespace yl {
     }
   }
 
+  inline result_type sorted_m(unit_ptr const& u, env_node_ptr& env) noexcept {
+    auto const& args = as_list(u->expr).children;
+    ASSERT_ARG_COUNT(u, >= 1);
+    ASSERT_ARG_COUNT(u, <= 2);
+
+    Q_OR_ERROR(args[1]);
+
+    bool has_custom_fn = args.size() > 2;
+    
+    if (has_custom_fn && !is_function(args[2]->expr)) {
+      FAIL_WITH("Expected a comparison function.", args[2]->pos);
+    }
+
+    auto const& sort_fn = 
+      has_custom_fn ? as_function(args[2]->expr).func : less_than_m;
+
+    unit_ptr ret = make_shared<unit>(
+      u->pos, 
+      as_list(args[1]->expr)
+    );
+
+    auto& children = as_list(ret->expr).children;
+
+    // yikes
+    try {
+      ::std::sort(
+        children.begin(), children.end(), 
+        [&](unit_ptr const& a, unit_ptr const& b) -> bool {
+          auto res = sort_fn(make_shared<unit>(
+            u->pos, 
+            list{
+              .q = false,
+              .children = {{a, a, b}, &mem_pool} 
+            }
+          ), env);
+
+          if (!res) {
+            throw res;
+          }
+
+          return as_numeric(res.value()->expr);
+        }
+      );
+    } catch (result_type const& err) {
+      return err;
+    }
+
+    return succeed(ret);
+  }
+
+  inline result_type stoi_m(unit_ptr const& u, env_node_ptr& env) noexcept {
+    auto const& args = as_list(u->expr).children;
+    ASSERT_ARG_COUNT(u, == 1);
+    RAW_OR_ERROR(args[1]);
+    try {
+      SUCCEED_WITH(u->pos, ::std::stoll(as_string(args[1]->expr).str.c_str()));
+    } catch (::std::invalid_argument const&) {
+      FAIL_WITH("Could not convert to a 64bit signed integer.", args[1]->pos);
+    } catch (::std::out_of_range const&) {
+      FAIL_WITH("Could not convert to a 64bit signed integer.", args[1]->pos);
+    }
+  }
+
   inline result_type readlines_m(unit_ptr const& u, env_node_ptr& env) noexcept {
     auto const& args = as_list(u->expr).children;
     ASSERT_ARG_COUNT(u, == 1);
@@ -651,6 +764,10 @@ namespace yl {
     while (::std::getline(in, line)) {
       lines.children.push_back(
         make_shared<unit>(args[1]->pos, string{::std::move(line), true}));  
+    }
+
+    if (lines.children.size() && as_string(lines.children.back()->expr).str.empty()) {
+      lines.children.pop_back();
     }
 
     SUCCEED_WITH(args[1]->pos, ::std::move(lines));

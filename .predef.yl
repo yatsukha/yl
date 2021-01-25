@@ -1,4 +1,4 @@
-# PREDEF, do not touch
+; PREDEF, do not touch
 def {fun} (
   \{args & body} 
   "Helper function for \\. 'fun {add x y} {+ x y}' defines a function assigned to add. You can add a comment as well: 'fun {add x y} \"My binary add.\" {+ x y}' which will be shown when you enter 'help add'." 
@@ -27,3 +27,35 @@ fun {do & actions} "Executes several actions in a row. Returns the value of the 
 
 fun {let body} "Opens up a new scope." { (\{} body) }
 
+fun {map seq f} "Transforms a sequence using f." {if (len seq) {cons (f (eval (head seq))) (map (tail seq) f)}}
+
+fun {filter seq f} "Filters a sequence using f." {
+  if (len seq)
+    {if (f (eval (head seq)))
+      {join (head seq) (filter (tail seq) f)}
+      {filter (tail seq) f}}
+}
+
+fun {zip a b} "Non-flat zip." {
+  if (& (!= a {}) (!= b {}))
+    {join (list (join (head a) (head b))) (zip (tail a) (tail b))}
+}
+
+(fun 
+  {binary_search col l r value error}
+  {if (> l r)
+    error
+    {do
+      (= {m} (+ l (/ (- r l) 2)))
+      (= {mval} (at_eval col m))
+      (if (< value mval)
+        {binary_search col l (- m 1) value error}
+        {if (> value mval)
+          {binary_search col (+ m 1) r value error}
+          mval})}})
+
+fun {reduce seq f} "Reduce." {
+  if (> (len seq) 1)
+    {f (eval (head seq)) (reduce (tail seq) f)}
+    {eval (head seq)}
+}

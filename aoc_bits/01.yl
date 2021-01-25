@@ -1,0 +1,32 @@
+; day 01
+
+= {ns} (sorted (map (readlines "01.txt") stoi))
+= {nl} (- (len ns) 1)
+
+fun {at_eval col i} {eval (at col i)}
+
+(fun 
+  {find_and_mul col i j n} 
+  {if (> i j) 
+    -1 
+    {do
+      (= {nn} (+ (at_eval col i) (at_eval col j)))
+      (if (< nn n) 
+        {find_and_mul col (+ i 1) j n} 
+        {if (> nn n) 
+          {find_and_mul col i (- j 1) n} 
+          {* (at_eval col i) (at_eval col j)}})}})
+
+; part 1
+find_and_mul ns 0 nl 2020
+
+; part 2
+(map
+  (filter 
+    (zip 
+      ns 
+      (map 
+        ns 
+        (\{n} {find_and_mul ns 0 nl (- 2020 n)})))
+    (\{x} {!= -1 (at_eval x 1)}))
+  (\{x} {reduce x *}))

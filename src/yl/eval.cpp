@@ -26,8 +26,19 @@ namespace yl {
       BUILTIN("last", "Returns the last element of a list/string.", last_m),
       BUILTIN("join", "Joins one or more Q expressions or raw strings.", join_m),
       BUILTIN("cons", "Appends its first argument to the second Q expression.", cons_m),
+      BUILTIN("at", "Indexes into a Q expression or  a raw string.", at_m),
       BUILTIN("len", "Calculates the length of a Q expression or a raw string.", len_m),
       BUILTIN("init", "Returns a Q expression or a raw string without it's last element.", init_m),
+      BUILTIN(
+        "sorted",
+        "Returns a new Q expression with sorted elements. Supports custom comparator.",
+        sorted_m
+      ),
+      BUILTIN(
+        "stoi",
+        "Converts a raw string to an integer.",
+        stoi_m
+      ),
       BUILTIN(
         "def",
         "Defines a global variable. 'def {a b} 1 2' assigns 1 and 2 to a and b.",
