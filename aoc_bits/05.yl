@@ -8,7 +8,7 @@
       (tail str)} 
     n})
 
-= {seats} (map (readlines "../aoc_2020_05.txt") (seat_to_binary 0))
+= {seats} (map (readlines "05.txt") (seat_to_binary 0))
 
 ; part 1
 reduce seats max
