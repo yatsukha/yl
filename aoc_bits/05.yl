@@ -1,0 +1,24 @@
+; day 05
+
+(fun 
+  {seat_to_binary n str} 
+  {if (len str) 
+    {seat_to_binary 
+      (| (<< n 1) (| (== "B" (head str)) (== "R" (head str))))
+      (tail str)} 
+    n})
+
+= {seats} (map (readlines "../aoc_2020_05.txt") (seat_to_binary 0))
+
+; part 1
+reduce seats max
+
+; part 2
+= {seats} (sorted seats)
+
+(map   
+  (filter
+    (zip (tail seats) (init seats))
+    (\{x} 
+      {unpack - (join x {1})}))
+  (\{x} {/ (unpack + x) 2}))

@@ -3,8 +3,6 @@
 = {ns} (sorted (map (readlines "01.txt") stoi))
 = {nl} (- (len ns) 1)
 
-fun {at_eval col i} {eval (at col i)}
-
 (fun 
   {find_and_mul col i j n} 
   {if (> i j) 

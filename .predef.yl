@@ -59,3 +59,7 @@ fun {reduce seq f} "Reduce." {
     {f (eval (head seq)) (reduce (tail seq) f)}
     {eval (head seq)}
 }
+
+fun {max a b} {if (>= a b) a b}
+
+fun {at_eval xs x} {eval (at xs x)}
