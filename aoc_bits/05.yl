@@ -8,14 +8,12 @@
       (tail str)} 
     n})
 
-= {seats} (map (readlines "05.txt") (seat_to_binary 0))
+= {seats} (sorted (map (readlines "05.txt") (seat_to_binary 0)))
 
 ; part 1
-reduce seats max
+at seats (- (len seats) 1)
 
 ; part 2
-= {seats} (sorted seats)
-
 (map   
   (filter
     (zip (tail seats) (init seats))
