@@ -1,6 +1,9 @@
+#include <algorithm>
+#include <iostream>
 #include <yl/eval.hpp>
 
 #include "builtins.hpp"
+#include "yl/types.hpp"
 
 namespace yl {
 
@@ -48,6 +51,11 @@ namespace yl {
         "=",
         "Assignes to a local variable. '= {a b} 1 2' assigns 1 and 2 to a and b.",
         def_m
+      ),
+      BUILTIN(
+        "decomp",
+        "Decomposes a Q expression into local variables.",
+        decompose_m
       ),
       BUILTIN(
         "\\", 

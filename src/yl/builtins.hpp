@@ -385,6 +385,56 @@ namespace yl {
     SUCCEED_WITH(u->pos, (list{}));
   }
 
+  namespace detail {
+
+    inline result_type decompose_impl(unit_ptr const& sym, 
+                                      unit_ptr const& expr,
+                                      env_node_ptr& node) noexcept {
+      if (is_string(sym->expr) && !as_string(sym->expr).raw) {
+        (*node->curr)[as_string(sym->expr).str] = expr;
+      } else if (is_q(sym)) {
+        Q_OR_ERROR(expr);
+
+        auto const& syms = as_list(sym->expr).children;
+        auto const& sube = as_list(expr->expr).children;
+
+        if (syms.size() != sube.size()) {
+          FAIL_WITH("Q expressions must be of equal length.", sym->pos);
+        }
+
+        for (::std::size_t i = 0; i < syms.size(); ++i) {
+          RETURN_IF_ERROR(detail::decompose_impl(syms[i], sube[i], node));
+        }
+      } else {
+        FAIL_WITH("Expected either a symbol or a sub-Q expression.", sym->pos);
+      }
+
+      SUCCEED_WITH(sym->pos, (list{}));
+    }
+
+  }
+
+  inline result_type decompose_m(unit_ptr const& u, env_node_ptr& node) noexcept {
+    auto const& args = as_list(u->expr).children;
+    ASSERT_ARG_COUNT(u, == 2);
+    
+    RETURN_IF_ERROR(detail::decompose_impl(args[1], args[2], node));
+    SUCCEED_WITH(u->pos, (list{}));
+  } 
+
+  inline bool same_syms(env_ptr const a, env_ptr const b) {
+    if (a->size() != b->size()) {
+      return false;
+    }
+    return 
+      ::std::equal(
+        a->begin(), a->end(), b->begin(),
+        [](environment::value_type const& a, environment::value_type const& b) {
+          return a.first == b.first;
+        }
+      );
+  }
+
   inline function::type create_function(
     bool const variadic, bool const unused,
     list const& arglist, unit_ptr const& body,
@@ -466,7 +516,10 @@ namespace yl {
         body, 
         make_shared<env_node>(env_node{
           .curr = self_env,
-          .prev = private_env
+          // TODO: change this when closures are here
+          .prev = private_env->curr && same_syms(private_env->curr, self_env) 
+            ? private_env->prev
+            : private_env
         }), 
         true
       );

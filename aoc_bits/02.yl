@@ -1,0 +1,38 @@
+; day 02
+
+(= 
+  {mappings} 
+  (map 
+    (readlines "02.txt")
+    (\{line}
+      {do
+        (= {tokens} (split line " "))
+        (list 
+          (map (split (eval (head tokens)) "-") stoi)
+          (head (at_eval tokens 1))
+          (at_eval tokens 2))})))
+
+; part 1
+(fun
+  {count str chr}
+  {if (len str)
+    {+ (== chr (head str)) (count (tail str) chr)}
+    0})
+
+(len 
+  (filter
+    mappings
+    (\{line}
+      {do
+        (decomp {{l r} chr str} line)
+        (= {cnt} (count str chr))
+        (& (<= l cnt) (>= r cnt))})))
+
+; part 2
+(len 
+  (filter
+    mappings
+    (\{line}
+      {do
+        (decomp {{l r} chr str} line)
+        (^ (== chr (at str (- l 1))) (== chr (at str (- r 1))))})))

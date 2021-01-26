@@ -17,7 +17,11 @@ fun {unpack f xs} "Unpacks an expression and applies given function to it. 'unpa
 
 fun {pack f & xs} "Packs an expression and applies given function to the resulting Q expression. 'pack eval + 1 2 3'" {f xs}
 
-fun {reverse l} "Reverses a given Q expression. 'eval (reverse {2 1 +})'" {if (== l {}) {{}} {join (reverse (tail l)) (head l)}}
+fun {reverse l} "Reverses a given Q expression. 'eval (reverse {2 1 +})'" {
+  if (< 2 (len l)) 
+    {join (reverse (tail l)) (head l)}
+    {if (== 2 (len l)) {join (at l 1) (at l 0)} {l} }
+}
 
 fun {repeat n expr} "Repeats an expression. 'unpack + (repeat 200 1)'" {if (== 0 n) {{}} {cons expr (repeat (- n 1) expr)}}
 
@@ -36,8 +40,8 @@ fun {filter seq f} "Filters a sequence using f." {
       {filter (tail seq) f}}
 }
 
-fun {zip a b} "Non-flat zip." {
-  if (& (!= a {}) (!= b {}))
+fun {zip a b} {
+  if (& (len a) (len b))
     {join (list (join (head a) (head b))) (zip (tail a) (tail b))}
 }
 
@@ -54,7 +58,7 @@ fun {zip a b} "Non-flat zip." {
           {binary_search col (+ m 1) r value error}
           mval})}})
 
-fun {reduce seq f} "Reduce." {
+fun {reduce seq f} {
   if (> (len seq) 1)
     {f (eval (head seq)) (reduce (tail seq) f)}
     {eval (head seq)}
@@ -63,3 +67,43 @@ fun {reduce seq f} "Reduce." {
 fun {max a b} {if (>= a b) a b}
 
 fun {at_eval xs x} {eval (at xs x)}
+
+(fun 
+  {drop seq n}
+  {if n
+    {drop (tail seq) (- n 1)}
+    {seq}})
+
+(fun
+  {take seq n}
+  {reverse (drop (reverse seq) (- (len seq) n))})
+
+(fun
+  {partial_compare long short} 
+  {if (< (len long) (len short)) 
+    0 
+    {== (take long (len short)) short}})
+
+(fun
+  {spill pair}
+  {list
+    (join 
+      (init (at_eval pair 0))
+      (list (join (eval (last (at_eval pair 0))) (head (at_eval pair 1)))))
+    (tail (at_eval pair 1))})
+
+(fun
+  {split_impl delim pair}
+  {do
+    (= {rest} (at_eval pair 1))
+    (if (len rest)
+      {if (partial_compare rest delim)
+        {split_impl delim (list (join (at_eval pair 0) {""}) (drop rest (len delim)))}
+        {split_impl delim (spill pair)}}
+      {at_eval pair 0})})
+
+(fun
+  {split str delim}
+  {filter
+    (split_impl delim {{""} str})
+    len})

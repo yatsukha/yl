@@ -17,6 +17,5 @@ at seats (- (len seats) 1)
 (map   
   (filter
     (zip (tail seats) (init seats))
-    (\{x} 
-      {unpack - (join x {1})}))
+    (\{x} {unpack - (join x {1})}))
   (\{x} {/ (unpack + x) 2}))

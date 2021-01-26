@@ -32,7 +32,7 @@ namespace yl {
     ::std::string s;
     ::std::visit(overloaded {
       [&s](numeric) { s = "numeric"; },
-      [&s](string) { s = "symbol"; },
+      [&s](string) { s = "string"; },
       [&s](function) { s = "function"; },
       [&](list) { s = "list"; },
     }, e);
