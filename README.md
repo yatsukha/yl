@@ -6,12 +6,54 @@
 
 This section just lists interesting features, not all of them.
 
- * code as value
  * predef
+ * code as value
+ ```
+yl> eval (join {+} (tail {- 2 1}))
+3
+ ```
+ * closures 
+  ```
+yl> (fun
+...   {closure_example}
+...   {do
+...     (= {local} 2)
+...     (\{} {local})}) ; captures a local value
+()
+yl> (closure_example)
+2
+ ```
  * basic error reporting, it will also print the line where the error is if it was entered previously in the interpreter
+ ```
+yl> fun {add x y} {+ x y}
+()
+yl> add "a" "b"
+1 entries ago:
+fun {add x y} {+ x y}
+                 ^
+Expected a numeric value got string: "a".
+ ```
  * variadic arguments for user defined functions
+ ```
+yl> (\{& xs} {len xs}) 1 2 3 4
+4
+ ```
  * partially evaluated user defined functions: if the function is not variadic and you pass less than the required number of arguments the function will be bound to those arguments
+ ```
+yl> fun {add x y} {+ x y}
+()
+yl> = {add_one} (add 1)
+()
+yl> add_one 5
+6
+ ```
  * recursion
+ ```
+yl> fun {fib n} {if (> n 1) {+ (fib (- n 1)) (fib (- n 2))} n}
+()
+yl> fib 10
+55
+ ```
 
 ## Building
 
@@ -89,14 +131,12 @@ Optimization of the interpreter went as follows (assisted by perf):
   2. Functions were rewritten to use references instead of copy. This yielded very small performance gains. Obviously the compiler was very good at optimizing value based arguments passing.
   3. The main bottleneck after 2. was returning copies of expressions, which mostly revolved around copying lists with __heavy__ children. I rewrote everything so that a single pool resource is used with shared pointers, this resulted in at least a 4x speedup.
   4. The program still spent a large amount of its runtime indexing into an unordered hash table with a string. I somewhat mitigated this by having a really fast and dumb hash function that just xors the first two chars in the string.
-  5. Very deep recursive calls resulted in having to look through a large number of environments to find a symbol that was defined in the global environment. To fix this I disregarded environments that don't differ in symbols, for example if a function has symbols 'a' and 'b' in its environment, it does not need the callers' environment that also has only 'a' and 'b' in its environment. This is most apparent with recursive functions. Disregarding the parent environment in these cases resulted in extreme improvements (5x speedup in some cases) for some functions. The best example of this was the 'split' function in predef which does everything recursively.
 
 ## Future work
 
 To achieve better performance:
-  * tail recursion optimization
-  * more builtins that do not rely on recursion
+  * bigger set of builtin functions
 
 Language features:
-  * proper closures
   * more numeric types
+  * builtin hashtable

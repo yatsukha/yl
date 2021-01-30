@@ -1,4 +1,5 @@
 ; PREDEF, do not touch
+
 def {fun} (
   \{args & body} 
   "Helper function for \\. 'fun {add x y} {+ x y}' defines a function assigned to add. You can add a comment as well: 'fun {add x y} \"My binary add.\" {+ x y}' which will be shown when you enter 'help add'." 
@@ -33,6 +34,13 @@ fun {let body} "Opens up a new scope." { (\{} body) }
 
 fun {map seq f} "Transforms a sequence using f." {if (len seq) {cons (f (eval (head seq))) (map (tail seq) f)}}
 
+(fun 
+  {foreach seq f}
+  {if (len seq) 
+    {do
+      (f (head seq))
+      (foreach (tail seq) f)}})
+
 fun {filter seq f} "Filters a sequence using f." {
   if (len seq)
     {if (f (eval (head seq)))
@@ -46,17 +54,27 @@ fun {zip a b} {
 }
 
 (fun 
-  {binary_search col l r value error}
+  {binary_search_impl col l r value error transform}
   {if (> l r)
     error
     {do
       (= {m} (+ l (/ (- r l) 2)))
-      (= {mval} (at_eval col m))
+      (= {mval} (transform (at_eval col m)))
       (if (< value mval)
-        {binary_search col l (- m 1) value error}
+        {binary_search_impl col l (- m 1) value error transform}
         {if (> value mval)
-          {binary_search col (+ m 1) r value error}
-          mval})}})
+          {binary_search_impl col (+ m 1) r value error transform}
+          {at_eval col m}})}})
+
+(fun {id x} {x})
+
+(fun
+  {binary_search col value error}
+  {binary_search_impl col 0 (- (len col) 1) value error id})
+
+(fun
+  {binary_search_t col value error transform}
+  {binary_search_impl col 0 (- (len col) 1) value error transform})
 
 fun {reduce seq f} {
   if (> (len seq) 1)
@@ -78,6 +96,15 @@ fun {at_eval xs x} {eval (at xs x)}
   {take seq n}
   {reverse (drop (reverse seq) (- (len seq) n))})
 
+(fun
+  {contains xs f}
+  {if (len xs)
+    {if (f (eval (head xs)))
+      1
+      {contains (tail xs) f}}
+    0})
+
+; old split function
 (fun
   {partial_compare long short} 
   {if (< (len long) (len short)) 
@@ -103,7 +130,8 @@ fun {at_eval xs x} {eval (at xs x)}
       {at_eval pair 0})})
 
 (fun
-  {split str delim}
+  {_split str delim}
   {filter
     (split_impl delim {{""} str})
     len})
+

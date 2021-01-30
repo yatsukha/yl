@@ -1,4 +1,3 @@
-#include <algorithm>
 #include <iostream>
 #include <yl/eval.hpp>
 
@@ -50,12 +49,17 @@ namespace yl {
       BUILTIN(
         "=",
         "Assignes to a local variable. '= {a b} 1 2' assigns 1 and 2 to a and b.",
-        def_m
+        assignment_m
       ),
       BUILTIN(
         "decomp",
         "Decomposes a Q expression into local variables.",
         decompose_m
+      ),
+      BUILTIN(
+        "split",
+        "Splits a raw string using a delimiter.",
+        split_m
       ),
       BUILTIN(
         "\\", 
@@ -93,7 +97,12 @@ namespace yl {
         "Terminates interpretation of the current line.\n"
         "Example: err \"Argument must be greater than 0.\".",
         err_m
-      )
+      ),
+      BUILTIN(
+        "str",
+        "Converts an expression to string.",
+        str_m
+      ),
     }, 1000, &mem_pool});
 
     return make_shared<env_node>(env_node{

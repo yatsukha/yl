@@ -1,9 +1,11 @@
 #pragma once
 
 #include "yl/mem.hpp"
+#include "yl/util.hpp"
 #include <algorithm>
 #include <fstream>
 
+#include <iostream>
 #include <stdexcept>
 #include <yl/types.hpp>
 #include <yl/eval.hpp>
@@ -43,7 +45,14 @@ namespace yl {
       return succeed(as_numeric(u->expr));
     }
 
-    FAIL_WITH(concat("Expected a numeric value got ", type_of(u->expr), "."), u->pos);
+    FAIL_WITH(
+      concat(
+        "Expected a numeric value got ", 
+        type_of(u->expr), 
+        ": ",
+        u->expr,
+        "."
+      ), u->pos);
   }
 
 #define ARITHMETIC_OPERATOR(name, operation) \
@@ -438,9 +447,10 @@ namespace yl {
   inline function::type create_function(
     bool const variadic, bool const unused,
     list const& arglist, unit_ptr const& body,
+    env_node_ptr closure,
     env_ptr self_env = {}
   ) noexcept {
-    return [=](unit_ptr const& u, env_node_ptr& private_env) mutable -> result_type {
+    return [=](unit_ptr const& u, env_node_ptr&) mutable -> result_type {
       auto const& arguments = as_list(u->expr).children;
       if (!variadic && arglist.children.size() < arguments.size() - 1) {
         FAIL_WITH(
@@ -506,6 +516,7 @@ namespace yl {
                 }
               },
               body,
+              closure,
               self_env
             )(nested_u, nested_env);
           }})
@@ -516,10 +527,7 @@ namespace yl {
         body, 
         make_shared<env_node>(env_node{
           .curr = self_env,
-          // TODO: change this when closures are here
-          .prev = private_env->curr && same_syms(private_env->curr, self_env) 
-            ? private_env->prev
-            : private_env
+          .prev = closure
         }), 
         true
       );
@@ -580,7 +588,7 @@ namespace yl {
       u->pos,
       (function{
         .description = ::std::move(doc_string),
-        .func = create_function(variadic, unused, arglist, body)
+        .func = create_function(variadic, unused, arglist, body, node)
       })
     );
   }
@@ -701,13 +709,19 @@ namespace yl {
   inline result_type name##_m(unit_ptr const& u, env_node_ptr& env) noexcept { \
     auto const& args = as_list(u->expr).children; \
     ASSERT_ARG_COUNT(u, == 2); \
-    if (args[1]->expr.index() != args[2]->expr.index() \
-        || !is_numeric(args[1]->expr)) { \
-      FAIL_WITH("Expected two numeric arguments", u->pos);  \
+    if (args[1]->expr.index() != args[2]->expr.index()) { \
+      FAIL_WITH("Expected two arguments of same type.", args[1]->pos);  \
     } \
-    SUCCEED_WITH(u->pos, static_cast<numeric>( \
-      as_numeric(args[1]->expr) op as_numeric(args[2]->expr) \
-    )); \
+    if (is_numeric(args[1]->expr)) { \
+      SUCCEED_WITH(u->pos, static_cast<numeric>( \
+        as_numeric(args[1]->expr) op as_numeric(args[2]->expr) \
+      )); \
+    } else if (is_raw(args[1])) { \
+      SUCCEED_WITH(u->pos, static_cast<numeric>( \
+        as_string(args[1]->expr).str op as_string(args[2]->expr).str \
+      )); \
+    } \
+    FAIL_WITH("Expected either raw strings or numbers as an argument.", args[1]->pos); \
   }
 
   SIMPLE_ORDERING(less_than, <);
@@ -791,13 +805,24 @@ namespace yl {
     auto const& args = as_list(u->expr).children;
     ASSERT_ARG_COUNT(u, == 1);
     RAW_OR_ERROR(args[1]);
+    auto const& str = as_string(args[1]->expr).str;
     try {
-      SUCCEED_WITH(u->pos, ::std::stoll(as_string(args[1]->expr).str.c_str()));
+      SUCCEED_WITH(u->pos, ::std::stoll(str.c_str()));
     } catch (::std::invalid_argument const&) {
-      FAIL_WITH("Could not convert to a 64bit signed integer.", args[1]->pos);
+      FAIL_WITH(
+        concat("Could not convert '", str, "'to a 64bit signed integer."), 
+        args[1]->pos);
     } catch (::std::out_of_range const&) {
-      FAIL_WITH("Could not convert to a 64bit signed integer.", args[1]->pos);
+      FAIL_WITH(
+        concat("Could not convert '", str, "'to a 64bit signed integer."), 
+        args[1]->pos);
     }
+  }
+
+  inline result_type str_m(unit_ptr const& u, env_node_ptr& env) noexcept {
+    auto const& args = as_list(u->expr).children;
+    ASSERT_ARG_COUNT(u, == 1);
+    SUCCEED_WITH(u->pos, (string{.str = concat(args[1]->expr), .raw = true}));
   }
 
   inline result_type readlines_m(unit_ptr const& u, env_node_ptr& env) noexcept {
@@ -824,6 +849,48 @@ namespace yl {
     }
 
     SUCCEED_WITH(args[1]->pos, ::std::move(lines));
+  }
+
+  inline result_type split_m(unit_ptr const& u, env_node_ptr& env) noexcept {
+    auto const& args = as_list(u->expr).children;
+    ASSERT_ARG_COUNT(u, == 2);
+    RAW_OR_ERROR(args[1]);
+    RAW_OR_ERROR(args[2]);
+    
+    auto const& input = as_string(args[1]->expr).str;
+    auto const& delim = as_string(args[2]->expr).str;
+
+    list ret{.q = true};
+    ::std::size_t last_split = 0ul;
+    ::std::size_t curr;
+
+    while ((curr = input.find(delim, last_split)) != ::std::string::npos) {
+      if (curr == last_split) {
+        last_split = curr + delim.length();
+        continue;
+      }
+
+      ret.children.push_back(make_shared<unit>(
+        u->pos, 
+        string{
+          .str = input.substr(last_split, curr - last_split),
+          .raw = true
+        }
+      ));
+      last_split = curr + delim.length();
+    }
+
+    if (last_split != input.length()) {
+      ret.children.push_back(make_shared<unit>(
+        u->pos, 
+        string{
+          .str = input.substr(last_split, input.length() - last_split),
+          .raw = true
+        }
+      ));
+    }
+
+    SUCCEED_WITH(u->pos, ret);
   }
 
   inline result_type err_m(unit_ptr const& u, env_node_ptr& env) noexcept {

@@ -1,0 +1,82 @@
+; day 07
+
+; parsing >>.>>
+(fun
+  {first_bag line}
+  {do
+    (decomp {l r} (split line " contain "))
+    (= {tokens} (split l " "))
+    (list (join (at_eval tokens 0) (at_eval tokens 1)) r)})
+
+(fun
+  {parse_bag tokens}
+  {do 
+    (= {n} (at_eval tokens 0))
+    (if (!= "no" n) 
+      {list 
+        (stoi (at_eval tokens 0)) 
+        (join (at_eval tokens 1) (at_eval tokens 2))})})
+
+(fun
+  {other_bags tokens}
+  {if (len tokens)
+    {do
+      (= {bag} (parse_bag tokens))
+      (if (len bag) {cons (parse_bag tokens) (other_bags (drop tokens 4))})}})
+
+= {lines} (readlines "07.txt")
+
+(= 
+  {bags} 
+  (map 
+    lines
+    (\{line} 
+      {do
+        (decomp {container rest} (first_bag line))
+        (= {other} (other_bags (split rest " ")))
+        (cons 
+          container (list (other)))})))
+
+fun {gh x} {eval (head x)}
+
+if (!= (len bags) (len lines)) {err "Failed to parse input."}
+= {bags} (sorted bags (\{a b} {< (gh a) (gh b)}))
+
+; part 1
+(fun
+  {expand bags sorted_list}
+  {do
+    (= 
+      {candidates}
+      (map
+        (filter 
+          bags
+          (\{mapping}
+            {do
+              (decomp {fb rest} mapping)
+              (if (== -1 (binary_search sorted_list fb -1))
+                {contains
+                  rest
+                  (\{u}
+                    {!= -1 (binary_search sorted_list (at_eval u 1) -1)})}
+                0)}))
+        (\{x} {gh x})))
+      (if (len candidates)
+        {expand bags (sorted (join candidates sorted_list))}
+        {sorted_list})})
+
+- (len (expand bags {"shinygold"})) 1
+
+; part 2
+(fun
+  {total_weight bags line}
+  {if (len line)
+    {do
+      (decomp {n bag} (gh line))
+      (decomp {_ nl} (binary_search_t bags bag -1 gh))
+      (= {curr} (if (== {} nl) 0 {total_weight bags nl}))
+      (= {rest} (total_weight bags (tail line)))
+      (+ n rest (* n curr))}
+    0})
+
+- (total_weight bags {{1 "shinygold"}}) 1

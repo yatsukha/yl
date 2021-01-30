@@ -121,9 +121,13 @@ namespace yl {
 
     while (balance < 0) {
       input = line_supplier();
-      if (!input[0]) {
+      if (!input) {
+        break;
+      }
+
+      if (::yl::detail::preproccess(input)) {
         ::free(input);
-        break; 
+        continue; 
       }
       balance += ::yl::paren_balance(input);
       ::std::strcat(buf, " ");
