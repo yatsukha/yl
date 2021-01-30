@@ -96,6 +96,8 @@ $ ./interpreter ../examples.yl
 
 ### Example usage
 
+Check out some solved Advent of Code days in [aoc_bits](aoc_bits) to see a more "realistic" usage. Also see [predef](.predef.yl).
+
 ```
 $ ./interpreter
 yatsukha's lisp
