@@ -97,12 +97,29 @@ fun {at_eval xs x} {eval (at xs x)}
   {reverse (drop (reverse seq) (- (len seq) n))})
 
 (fun
-  {contains xs f}
+  {index_of_impl xs f n}
   {if (len xs)
     {if (f (eval (head xs)))
-      1
-      {contains (tail xs) f}}
-    0})
+      n
+      {index_of_impl (tail xs) f (+ n 1)}}
+    -1})
+
+(fun
+  {index_of xs f}
+  {index_of_impl xs f 0})
+
+(fun
+  {contains xs f}
+  {!= -1 (index_of xs f)})
+
+(fun
+  {switch value & cases}
+  {do
+    (if (== 0 (len cases)) {err "Cases must contain at least a default case."})
+    (= {idx} (index_of (init cases) (\{x} {== value (eval (head x))})))
+    (if (!= idx -1)
+      {tail (at_eval cases idx)}
+      {eval (last cases)})})
 
 ; old split function
 (fun

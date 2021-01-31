@@ -1,0 +1,83 @@
+; day 08
+
+(= 
+  {instructions}
+  (map
+    (readlines "08.txt")
+    (\{line}
+      {do
+        (decomp {op str_off} (split line " "))
+        (list op (stoi str_off))})))
+
+(fun 
+  {interpret in aip}
+  {do
+    (decomp {op off} in)
+    (decomp {acc ip} aip)
+    (eval 
+      (switch op
+        {"nop" list acc (+ ip 1)}
+        {"acc" list (+ acc off) (+ ip 1)}
+        {"jmp" list acc (+ ip off)}
+        {err "Invalid instruction."}))})
+
+; part 1
+(fun
+  {replace xs idx x}
+  {join 
+    (take xs idx) 
+    (list x)
+    (drop xs (+ idx 1))})
+
+(fun 
+  {find_loop instructions aip visited trace}
+  {do 
+    (decomp {acc ip} aip)
+    (= {out_of_bounds} (>= ip (len instructions)))
+    (= 
+      {evaluated}
+      (if (out_of_bounds) 0 {at_eval visited ip}))
+    (if (| out_of_bounds evaluated)
+      {list aip trace}
+      {do
+        (= {instr} (at_eval instructions ip))
+        (decomp {op off} instr)
+        (find_loop 
+          instructions 
+          (interpret instr aip)
+          (replace visited ip 1)
+          (if (!= -1 trace)
+            {if (!= op "acc")
+              {cons (list aip visited instr) trace}
+              {trace}}
+            -1))})})
+
+; part 1
+= {zeroes} (repeat (len instructions) 0)
+
+(decomp
+  {{acc _} trace}
+  (find_loop instructions {0 0} zeroes {}))
+
+acc
+
+; part 2
+(fun
+  {find_exit instructions trace}
+  {if (len trace)
+    {do 
+      (decomp {{acc ip} visited {op off}} (eval (head trace)))
+      (decomp 
+        {{acc ip} _} 
+        (find_loop
+          (replace 
+            instructions ip 
+            (list (if (== "nop" op) {"jmp"} {"nop"}) off))
+          (list acc ip)
+          visited
+          -1))
+      (if (>= ip (len instructions))
+        {acc}
+        {find_exit instructions (tail trace)})}})
+
+find_exit instructions trace

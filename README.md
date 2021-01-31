@@ -138,6 +138,7 @@ Optimization of the interpreter went as follows (assisted by perf):
 
 To achieve better performance:
   * bigger set of builtin functions
+  * persistent vector for representation of the list type
 
 Language features:
   * more numeric types
