@@ -4,38 +4,38 @@
 (fun
   {first_bag line}
   {do
-    (decomp {l r} (split line " contain "))
-    (= {tokens} (split l " "))
-    (list (join (at_eval tokens 0) (at_eval tokens 1)) r)})
+    (decomp {l r} (split " contain " line))
+    (= {tokens} (split " " l))
+    (list (join (at_eval 0 tokens) (at_eval 1 tokens)) r)})
 
 (fun
   {parse_bag tokens}
   {do 
-    (= {n} (at_eval tokens 0))
+    (= {n} (at_eval 0 tokens))
     (if (!= "no" n) 
       {list 
-        (stoi (at_eval tokens 0)) 
-        (join (at_eval tokens 1) (at_eval tokens 2))})})
+        (int (at_eval 0 tokens)) 
+        (join (at_eval 1 tokens) (at_eval 2 tokens))})})
 
 (fun
   {other_bags tokens}
   {if (len tokens)
     {do
       (= {bag} (parse_bag tokens))
-      (if (len bag) {cons (parse_bag tokens) (other_bags (drop tokens 4))})}})
+      (if (len bag) {cons (parse_bag tokens) (other_bags (drop 4 tokens))})}})
 
 = {lines} (readlines "07.txt")
 
 (= 
   {bags} 
   (map 
-    lines
     (\{line} 
       {do
         (decomp {container rest} (first_bag line))
-        (= {other} (other_bags (split rest " ")))
+        (= {other} (other_bags (split " " rest)))
         (cons 
-          container (list (other)))})))
+          container (list (other)))})
+    lines))
 
 fun {gh x} {eval (head x)}
 
@@ -49,18 +49,18 @@ if (!= (len bags) (len lines)) {err "Failed to parse input."}
     (= 
       {candidates}
       (map
+        (\{x} {gh x})
         (filter 
-          bags
           (\{mapping}
             {do
               (decomp {fb rest} mapping)
               (if (== -1 (binary_search sorted_list fb -1))
                 {contains
-                  rest
                   (\{u}
-                    {!= -1 (binary_search sorted_list (at_eval u 1) -1)})}
-                0)}))
-        (\{x} {gh x})))
+                    {!= -1 (binary_search sorted_list (at_eval 1 u) -1)})
+                  rest}
+                0)})
+            bags)))
       (if (len candidates)
         {expand bags (sorted (join candidates sorted_list))}
         {sorted_list})})

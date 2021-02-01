@@ -3,11 +3,11 @@
 (= 
   {instructions}
   (map
-    (readlines "08.txt")
     (\{line}
       {do
-        (decomp {op str_off} (split line " "))
-        (list op (stoi str_off))})))
+        (decomp {op str_off} (split " " line))
+        (list op (int str_off))})
+    (readlines "08.txt")))
 
 (fun 
   {interpret in aip}
@@ -23,11 +23,11 @@
 
 ; part 1
 (fun
-  {replace xs idx x}
+  {replace idx x xs}
   {join 
-    (take xs idx) 
+    (take idx xs) 
     (list x)
-    (drop xs (+ idx 1))})
+    (drop (+ idx 1) xs)})
 
 (fun 
   {find_loop instructions aip visited trace}
@@ -36,16 +36,16 @@
     (= {out_of_bounds} (>= ip (len instructions)))
     (= 
       {evaluated}
-      (if (out_of_bounds) 0 {at_eval visited ip}))
+      (if (out_of_bounds) 0 {at_eval ip visited}))
     (if (| out_of_bounds evaluated)
       {list aip trace}
       {do
-        (= {instr} (at_eval instructions ip))
+        (= {instr} (at_eval ip instructions))
         (decomp {op off} instr)
         (find_loop 
           instructions 
           (interpret instr aip)
-          (replace visited ip 1)
+          (replace ip 1 visited)
           (if (!= -1 trace)
             {if (!= op "acc")
               {cons (list aip visited instr) trace}
@@ -71,8 +71,9 @@ acc
         {{acc ip} _} 
         (find_loop
           (replace 
-            instructions ip 
-            (list (if (== "nop" op) {"jmp"} {"nop"}) off))
+            ip 
+            (list (if (== "nop" op) {"jmp"} {"nop"}) off)
+            instructions)
           (list acc ip)
           visited
           -1))

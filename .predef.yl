@@ -18,10 +18,10 @@ fun {unpack f xs} "Unpacks an expression and applies given function to it. 'unpa
 
 fun {pack f & xs} "Packs an expression and applies given function to the resulting Q expression. 'pack eval + 1 2 3'" {f xs}
 
-fun {reverse l} "Reverses a given Q expression. 'eval (reverse {2 1 +})'" {
+fun {reversed l} "Reverses a given Q expression. 'eval (reversed {2 1 +})'" {
   if (< 2 (len l)) 
-    {join (reverse (tail l)) (head l)}
-    {if (== 2 (len l)) {join (at l 1) (at l 0)} {l} }
+    {join (reversed (tail l)) (head l)}
+    {if (== 2 (len l)) {join (at 1 l) (at 0 l)} {l} }
 }
 
 fun {repeat n expr} "Repeats an expression. 'unpack + (repeat 200 1)'" {if (== 0 n) {{}} {cons expr (repeat (- n 1) expr)}}
@@ -32,7 +32,7 @@ fun {do & actions} "Executes several actions in a row. Returns the value of the 
 
 fun {let body} "Opens up a new scope." { (\{} body) }
 
-fun {map seq f} "Transforms a sequence using f." {if (len seq) {cons (f (eval (head seq))) (map (tail seq) f)}}
+fun {map f seq} "Transforms a sequence using f." {if (len seq) {cons (f (eval (head seq))) (map f (tail seq))}}
 
 (fun 
   {foreach seq f}
@@ -41,11 +41,11 @@ fun {map seq f} "Transforms a sequence using f." {if (len seq) {cons (f (eval (h
       (f (head seq))
       (foreach (tail seq) f)}})
 
-fun {filter seq f} "Filters a sequence using f." {
+fun {filter f seq} "Filters a sequence using f." {
   if (len seq)
     {if (f (eval (head seq)))
-      {join (head seq) (filter (tail seq) f)}
-      {filter (tail seq) f}}
+      {join (head seq) (filter f (tail seq))}
+      {filter f (tail seq)}}
 }
 
 fun {zip a b} {
@@ -59,12 +59,12 @@ fun {zip a b} {
     error
     {do
       (= {m} (+ l (/ (- r l) 2)))
-      (= {mval} (transform (at_eval col m)))
+      (= {mval} (transform (at_eval m col)))
       (if (< value mval)
         {binary_search_impl col l (- m 1) value error transform}
         {if (> value mval)
           {binary_search_impl col (+ m 1) r value error transform}
-          {at_eval col m}})}})
+          {at_eval m col}})}})
 
 (fun {id x} {x})
 
@@ -76,79 +76,47 @@ fun {zip a b} {
   {binary_search_t col value error transform}
   {binary_search_impl col 0 (- (len col) 1) value error transform})
 
-fun {reduce seq f} {
+fun {reduce f seq} {
   if (> (len seq) 1)
-    {f (eval (head seq)) (reduce (tail seq) f)}
+    {f (eval (head seq)) (reduce f (tail seq))}
     {eval (head seq)}
 }
 
 fun {max a b} {if (>= a b) a b}
 
-fun {at_eval xs x} {eval (at xs x)}
+fun {at_eval x xs} {eval (at x xs)}
 
 (fun 
-  {drop seq n}
+  {drop n seq}
   {if n
-    {drop (tail seq) (- n 1)}
+    {drop (- n 1) (tail seq)}
     {seq}})
 
 (fun
-  {take seq n}
-  {reverse (drop (reverse seq) (- (len seq) n))})
+  {take n seq}
+  {reversed (drop (- (len seq) n) (reversed seq))})
 
 (fun
-  {index_of_impl xs f n}
+  {index_of_impl f n xs}
   {if (len xs)
     {if (f (eval (head xs)))
       n
-      {index_of_impl (tail xs) f (+ n 1)}}
+      {index_of_impl f (+ n 1) (tail xs)}}
     -1})
 
 (fun
-  {index_of xs f}
-  {index_of_impl xs f 0})
+  {index_of f xs}
+  {index_of_impl f 0 xs})
 
 (fun
-  {contains xs f}
-  {!= -1 (index_of xs f)})
+  {contains f xs}
+  {!= -1 (index_of f xs)})
 
 (fun
   {switch value & cases}
   {do
     (if (== 0 (len cases)) {err "Cases must contain at least a default case."})
-    (= {idx} (index_of (init cases) (\{x} {== value (eval (head x))})))
+    (= {idx} (index_of (\{x} {== value (eval (head x))}) (init cases)))
     (if (!= idx -1)
-      {tail (at_eval cases idx)}
+      {tail (at_eval idx cases)}
       {eval (last cases)})})
-
-; old split function
-(fun
-  {partial_compare long short} 
-  {if (< (len long) (len short)) 
-    0 
-    {== (take long (len short)) short}})
-
-(fun
-  {spill pair}
-  {list
-    (join 
-      (init (at_eval pair 0))
-      (list (join (eval (last (at_eval pair 0))) (head (at_eval pair 1)))))
-    (tail (at_eval pair 1))})
-
-(fun
-  {split_impl delim pair}
-  {do
-    (= {rest} (at_eval pair 1))
-    (if (len rest)
-      {if (partial_compare rest delim)
-        {split_impl delim (list (join (at_eval pair 0) {""}) (drop rest (len delim)))}
-        {split_impl delim (spill pair)}}
-      {at_eval pair 0})})
-
-(fun
-  {_split str delim}
-  {filter
-    (split_impl delim {{""} str})
-    len})
-

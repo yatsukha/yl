@@ -281,27 +281,27 @@ namespace yl {
 
     ASSERT_ARG_COUNT(u, == 2);
 
-    if (!is_numeric(args[2]->expr)) {
-      FAIL_WITH("Expected an index.", args[2]->pos);
+    if (!is_numeric(args[1]->expr)) {
+      FAIL_WITH("Expected an index.", args[1]->pos);
     }
 
-    auto const idx = as_numeric(args[2]->expr);
+    auto const idx = as_numeric(args[1]->expr);
 
     if (idx < 0) {
-      FAIL_WITH("Expected a non negative number.", args[2]->pos);
+      FAIL_WITH("Expected a non negative number.", args[1]->pos);
     }
 
     bool q;
-    if (!(q = is_q(args[1])) && !is_raw(args[1])) {
-      FAIL_WITH("Expected a Q expression or a raw string.", args[1]->pos);
+    if (!(q = is_q(args[2])) && !is_raw(args[2])) {
+      FAIL_WITH("Expected a Q expression or a raw string.", args[2]->pos);
     }
 
 
     if (q) {
-      auto const& ls = as_list(args[1]->expr).children;
+      auto const& ls = as_list(args[2]->expr).children;
       if (static_cast<::std::size_t>(idx) >= ls.size()) {
         FAIL_WITH(concat("Index ", idx, " is out of bounds."),  
-                  args[2]->pos);
+                  args[1]->pos);
       }
 
       list ret{.q = true};
@@ -310,10 +310,10 @@ namespace yl {
       SUCCEED_WITH(u->pos, ret);
     }
 
-    auto const& str = as_string(args[1]->expr).str;
+    auto const& str = as_string(args[2]->expr).str;
     if (static_cast<::std::size_t>(idx) >= str.length()) {
       FAIL_WITH(concat("Index ", idx, " is out of bounds."), 
-                args[2]->pos);
+                args[1]->pos);
     }
     string ret{.raw = true};
     ret.str += str[idx];
@@ -857,8 +857,8 @@ namespace yl {
     RAW_OR_ERROR(args[1]);
     RAW_OR_ERROR(args[2]);
     
-    auto const& input = as_string(args[1]->expr).str;
-    auto const& delim = as_string(args[2]->expr).str;
+    auto const& input = as_string(args[2]->expr).str;
+    auto const& delim = as_string(args[1]->expr).str;
 
     list ret{.q = true};
     ::std::size_t last_split = 0ul;

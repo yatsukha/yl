@@ -37,7 +37,7 @@ namespace yl {
         sorted_m
       ),
       BUILTIN(
-        "stoi",
+        "int",
         "Converts a raw string to an integer.",
         stoi_m
       ),

@@ -8,14 +8,14 @@
       (tail str)} 
     n})
 
-= {seats} (sorted (map (readlines "05.txt") (seat_to_binary 0)))
+= {seats} (sorted (map (seat_to_binary 0) (readlines "05.txt")))
 
 ; part 1
-at seats (- (len seats) 1)
+at (- (len seats) 1) seats
 
 ; part 2
 (map   
+  (\{x} {/ (unpack + x) 2})
   (filter
-    (zip (tail seats) (init seats))
-    (\{x} {unpack - (join x {1})}))
-  (\{x} {/ (unpack + x) 2}))
+    (\{x} {unpack - (join x {1})})
+    (zip (tail seats) (init seats))))
