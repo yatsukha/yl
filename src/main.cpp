@@ -201,11 +201,16 @@ int main(int const argc, char const* const* argv) {
 
   if (argc > 1) {
     input_file = ::std::ifstream{argv[1]};
-  }
-
-  if (input_file.is_open()) {
-    ::std::cout << "interpreting '" << argv[1] << "'" << "\n\n";
-    ::yl::handle_file(::std::move(input_file), ::std::cout, ::std::cerr);
+    if (input_file.is_open()) {
+      ::std::cout << "interpreting '" << argv[1] << "'" << "\n\n";
+      ::yl::handle_file(::std::move(input_file), ::std::cout, ::std::cerr);
+    } else {
+      ::std::cerr << "unable to open given file for interpretation: "
+                  << argv[1]
+                  << "\n"
+                  << "exiting"
+                  << "\n"; 
+    }
   } else {
     ::std::string prompt = "yl> ";
     ::std::string continuation_prompt = "... ";

@@ -26,6 +26,16 @@ fun {reversed l} "Reverses a given Q expression. 'eval (reversed {2 1 +})'" {
 
 fun {repeat n expr} "Repeats an expression. 'unpack + (repeat 200 1)'" {if (== 0 n) {{}} {cons expr (repeat (- n 1) expr)}}
 
+(fun
+  {range_step a b step}
+  {if (!= a b)
+    {cons a (range_step (+ a step) b step)}})
+
+(fun
+  {range a b}
+  "Increasing sequence from a to b, b is excluded." 
+  {range_step a b 1})
+
 fun {do & actions} "Executes several actions in a row. Returns the value of the last action." {
   if (!= {} actions) { eval (last actions) }
 }
