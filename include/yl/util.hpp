@@ -31,7 +31,7 @@ namespace yl {
   string_representation concat(Args&& ...args) noexcept {
     ::std::stringstream ss; // C++20 when
     detail::cat(ss, ::std::forward<Args>(args)...);
-    return string_representation{ss.str(), &mem_pool};
+    return make_string(ss.str().c_str());
   }
 
   template<class... Ts> struct overloaded : Ts... { using Ts::operator()...; };

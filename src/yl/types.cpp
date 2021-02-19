@@ -39,4 +39,15 @@ namespace yl {
     return s;
   }
 
+  bool has_ordering(expression const& e) noexcept {
+    bool b;
+    ::std::visit(overloaded {
+      [&b](numeric) { b = true; },
+      [&b](string) { b = true; },
+      [&b](function) { b = false; },
+      [&](list) { b = false; },
+    }, e);
+    return b;
+  }
+
 }

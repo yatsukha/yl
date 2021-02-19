@@ -137,6 +137,11 @@ namespace yl {
       return reinterpret_cast<A const&>(data);
     }
 
+    template<typename A = S, typename = ::std::enable_if_t<!::std::is_same_v<void, A>>>
+    A const& operator*() const noexcept {
+      return value();
+    }
+
     template<typename A = E, typename = ::std::enable_if_t<!::std::is_same_v<void, A>>>
     A const& error() const noexcept {
       if (!is_error()) {
@@ -169,19 +174,19 @@ namespace yl {
     }
   };
 
-  inline either<void, void> succeed() noexcept {
+  [[nodiscard]] inline either<void, void> succeed() noexcept {
     return either<void, void>{false};
   }
  
   template<typename S, typename SS = ::std::remove_reference_t<S>>
-  inline either<void, SS> succeed(S s) noexcept {
+  [[nodiscard]] inline either<void, SS> succeed(S s) noexcept {
     either<void, SS> e{false};
     new (e.data) SS{::std::move(s)};
     return e;
   }    
 
   template<typename E, typename EE = ::std::remove_reference_t<E>>
-  inline either<EE> fail(E e) noexcept {
+  [[nodiscard]] inline either<EE> fail(E e) noexcept {
     either<EE> ret{true};
     new (ret.data) EE{e};
     return ret;

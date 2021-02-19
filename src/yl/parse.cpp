@@ -113,12 +113,22 @@ namespace yl {
 
     string s{{line + start, line + curr}};
 
-    try {
-      SUCCEED_WITH(
-        (position{line_num, start}),
-        ::std::stol(s.str.c_str())
-      );
-    } catch (::std::invalid_argument const&) {}
+    // non null char** required for strtoll
+    char* eptr = reinterpret_cast<char*>(1);
+    char const* sptr = s.str.c_str();
+
+    auto const n = ::std::strtoll(sptr, &eptr, 10);
+
+    if (eptr > sptr) {
+      if (eptr != sptr + s.str.size()) {
+        FAIL_WITH(
+          "Invalid number format. Expected a signed integer.", 
+          (position{line_num, start + (eptr - sptr)})
+        );
+      }
+
+      SUCCEED_WITH((position{line_num, start}), n);
+    }
 
     SUCCEED_WITH((position{line_num, start}), s);
   }

@@ -32,12 +32,12 @@ namespace yl {
 
 #define FAIL_WITH(msg, pos) \
   return fail(error_info{ \
-    string_representation{msg, &mem_pool}, \
+    make_string(msg), \
     pos \
   });
 
 #define RETURN_IF_ERROR(either) \
-  if (!either) { \
+  if (!(either)) { \
     return fail(either.error()); \
   }
 

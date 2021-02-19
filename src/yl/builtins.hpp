@@ -95,7 +95,7 @@ namespace yl {
   inline result_type list_m(unit_ptr const& u, env_node_ptr& node) noexcept {
     auto const& args = as_list(u->expr).children;
     ASSERT_ARG_COUNT(u, >= 1);
-    SUCCEED_WITH(u->pos, (list{true, {args.begin() + 1, args.end(), &mem_pool}}));
+    SUCCEED_WITH(u->pos, (list{true, make_seq<unit_ptr>(args.begin() + 1, args.end())}));
   }
 
 #define SINGLE_LIST_BUILTIN(name, q_expr, r_string) \
@@ -120,10 +120,9 @@ namespace yl {
         (list{
           true, 
           empty 
-            ? list::children_type{&mem_pool} 
-            : list::children_type{
-              ls.children.begin(), ls.children.begin() + 1, &mem_pool
-            }
+            ? make_seq<unit_ptr>()
+            : make_seq<unit_ptr>(
+              ls.children.begin(), ls.children.begin() + 1)
         })
       );
     },
@@ -133,8 +132,8 @@ namespace yl {
         u->pos,
         (string{
           .str = str.empty() 
-            ? string_representation{"", &mem_pool} 
-            : string_representation{str.begin(), str.begin() + 1, &mem_pool},
+            ? make_string()
+            : make_string(str.begin(), str.begin() + 1),
           .raw = true
         })
       );
@@ -147,13 +146,12 @@ namespace yl {
       auto const& ls = as_list(u->expr);
       SUCCEED_WITH(u->pos, (list{
         true,
-        {
+        make_seq<unit_ptr>(
           ls.children.begin() + 1, 
           ls.children.empty() 
             ? ls.children.begin() + 1
-            : ls.children.end(),
-          &mem_pool
-        }
+            : ls.children.end()
+        )
       }));
     },
     [](auto const& u) {
@@ -161,11 +159,10 @@ namespace yl {
       SUCCEED_WITH(
         u->pos,
         (string{
-          .str = {
+          .str = make_string(
             str.begin() + 1, 
-            str.empty() ? str.begin() + 1 : str.end(), 
-            &mem_pool
-          },
+            str.empty() ? str.begin() + 1 : str.end() 
+          ),
           .raw = true
         })
       );
@@ -179,11 +176,10 @@ namespace yl {
       auto const empty = ls.children.empty();
       SUCCEED_WITH(empty ? u->pos : ls.children.back()->pos, (list{
         true,
-        {
+        make_seq<unit_ptr>(
           ls.children.end() - !empty, 
-          ls.children.end(),
-          &mem_pool
-        }
+          ls.children.end()
+        )
       }));
     },
     [](auto const& u) {
@@ -191,11 +187,10 @@ namespace yl {
       SUCCEED_WITH(
         u->pos,
         (string{
-          .str = {
+          .str = make_string(
             str.end() - !str.empty(), 
-            str.end(), 
-            &mem_pool
-          },
+            str.end()
+          ),
           .raw = true
         })
       );
@@ -210,11 +205,10 @@ namespace yl {
         u->pos,
         (list{
           true, 
-          {
+          make_seq<unit_ptr>(
             ls.children.begin(), 
-            ls.children.empty() ? ls.children.begin() : ls.children.end() - 1,
-            &mem_pool
-          } 
+            ls.children.empty() ? ls.children.begin() : ls.children.end() - 1
+          )
         })
       );
     },
@@ -223,9 +217,9 @@ namespace yl {
       SUCCEED_WITH(
         u->pos,
         (string{
-          .str = {
-            str.begin(), str.empty() ? str.begin() : str.end() - 1, &mem_pool
-          },
+          .str = make_string(
+            str.begin(), str.empty() ? str.begin() : str.end() - 1
+          ),
           .raw = true
         })
       );
@@ -431,19 +425,6 @@ namespace yl {
     SUCCEED_WITH(u->pos, (list{}));
   } 
 
-  inline bool same_syms(env_ptr const a, env_ptr const b) {
-    if (a->size() != b->size()) {
-      return false;
-    }
-    return 
-      ::std::equal(
-        a->begin(), a->end(), b->begin(),
-        [](environment::value_type const& a, environment::value_type const& b) {
-          return a.first == b.first;
-        }
-      );
-  }
-
   inline function::type create_function(
     bool const variadic, bool const unused,
     list const& arglist, unit_ptr const& body,
@@ -492,7 +473,7 @@ namespace yl {
               arguments[i + 1]->pos,
               list{
                 true, 
-                {arguments.begin() + i + 1, arguments.end(), &mem_pool}
+                make_seq<unit_ptr>(arguments.begin() + i + 1, arguments.end())
               }
             );
           break;
@@ -504,7 +485,7 @@ namespace yl {
 
       if (partial) {
         SUCCEED_WITH(body->pos, (function{
-          .description = {"User defined partially evaluated function.", &mem_pool},
+          .description = make_string("User defined partially evaluated function."),
           .func = [=](unit_ptr const& nested_u, env_node_ptr& nested_env) -> result_type {
             return create_function(
               false, false, 
@@ -542,7 +523,7 @@ namespace yl {
 
     Q_OR_ERROR(args[1]);
 
-    string_representation doc_string{"User defined function.", &mem_pool};
+    auto doc_string = make_string("User defined function.");
 
     if (args.size() == 4) {
       Q_OR_ERROR(args[3]);
@@ -598,7 +579,7 @@ namespace yl {
     
     ASSERT_ARG_COUNT(u, <= 1);
 
-    string s{{"\n", &mem_pool}, true};
+    string s{make_string("\n"), true};
 
     if (args.size() == 1) {
       s.str +=
@@ -751,21 +732,71 @@ namespace yl {
     }
   }
 
+  namespace detail {
+
+    // sort functions that take a comparator than can return an error
+
+    template<typename Iter, typename Comp>
+    either<error_info, Iter> partition(Iter begin, Iter end, Comp const& cmp) 
+        noexcept {
+      // median as pivot
+      auto mid = begin + (end-- - begin) / 2;
+
+      auto cond = cmp(*begin, *mid);
+      RETURN_IF_ERROR(cond);
+      if (as_numeric(cond.value()->expr)) ::std::swap(*begin, *mid);
+      
+      cond = cmp(*end, *mid);
+      RETURN_IF_ERROR(cond);
+      if (as_numeric(cond.value()->expr)) ::std::swap(*end, *mid);
+
+      cond = cmp(*end, *begin);
+      RETURN_IF_ERROR(cond);
+      if (as_numeric(cond.value()->expr)) ::std::swap(*end, *begin);
+
+      auto pivot = *begin;
+
+      --begin;
+      ++end;
+
+      for (;;) {
+        do {
+          cond = cmp(*(++begin), pivot);
+          RETURN_IF_ERROR(cond);
+        } while (as_numeric(cond.value()->expr));
+
+        do {
+          cond = cmp(pivot, *(--end));
+          RETURN_IF_ERROR(cond);
+        } while (as_numeric(cond.value()->expr));
+
+        if (begin >= end) {
+          return succeed(++end);
+        }
+        ::std::swap(*begin, *end);
+      }
+    }
+
+    template<typename Iter, typename Comp>
+    either<error_info> quick_sort(Iter begin, Iter end, Comp const& cmp) {
+      if (end - begin <= 1) {
+        return succeed();
+      }
+      auto mid = detail::partition(begin, end, cmp);
+      RETURN_IF_ERROR(mid);
+      RETURN_IF_ERROR(quick_sort(begin, *mid, cmp));
+      RETURN_IF_ERROR(quick_sort(*mid, end, cmp));
+      return succeed();
+    }
+
+  }
+
   inline result_type sorted_m(unit_ptr const& u, env_node_ptr& env) noexcept {
     auto const& args = as_list(u->expr).children;
     ASSERT_ARG_COUNT(u, >= 1);
     ASSERT_ARG_COUNT(u, <= 2);
 
     Q_OR_ERROR(args[1]);
-
-    bool has_custom_fn = args.size() > 2;
-    
-    if (has_custom_fn && !is_function(args[2]->expr)) {
-      FAIL_WITH("Expected a comparison function.", args[2]->pos);
-    }
-
-    auto const& sort_fn = 
-      has_custom_fn ? as_function(args[2]->expr).func : less_than_m;
 
     unit_ptr ret = make_shared<unit>(
       u->pos, 
@@ -774,30 +805,38 @@ namespace yl {
 
     auto& children = as_list(ret->expr).children;
 
-    // yikes
-    try {
-      ::std::sort(
-        children.begin(), children.end(), 
-        [&](unit_ptr const& a, unit_ptr const& b) -> bool {
-          auto res = sort_fn(make_shared<unit>(
-            u->pos, 
-            list{
-              .q = false,
-              .children = {{a, a, b}, &mem_pool} 
-            }
-          ), env);
-
-          if (!res) {
-            throw res;
-          }
-
-          return as_numeric(res.value()->expr);
-        }
-      );
-    } catch (result_type const& err) {
-      return err;
+    if (children.empty()) {
+      return succeed(ret);
     }
 
+    bool has_custom_fn = args.size() > 2;
+
+    if (has_custom_fn && !is_function(args[2]->expr)) {
+      FAIL_WITH("Expected a comparison function.", args[2]->pos);
+    }
+
+    auto const& sort_fn = 
+      has_custom_fn ? as_function(args[2]->expr).func : less_than_m;
+
+    auto err = detail::quick_sort(
+      children.begin(), children.end(),
+      [&](unit_ptr a, unit_ptr b) {
+        auto children = make_seq<unit_ptr>();
+
+        children.push_back(a);
+        children.push_back(a);
+        children.push_back(b);
+
+        return sort_fn(make_shared<unit>(
+          u->pos, 
+          list{
+            .q = false,
+            .children = ::std::move(children)}
+        ), env);
+      }
+    );
+
+    RETURN_IF_ERROR(err);
     return succeed(ret);
   }
 
@@ -838,7 +877,7 @@ namespace yl {
 
     list lines{.q = true};
 
-    string_representation line{&mem_pool};
+    auto line = make_string();
     while (::std::getline(in, line)) {
       lines.children.push_back(
         make_shared<unit>(args[1]->pos, string{::std::move(line), true}));  

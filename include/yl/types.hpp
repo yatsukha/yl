@@ -14,7 +14,7 @@ namespace yl {
   // base types
 
   struct string {
-    string_representation str{&mem_pool};
+    string_representation str = make_string();
     bool raw = false;
   };
 
@@ -25,16 +25,18 @@ namespace yl {
   using expression = ::std::variant<numeric, string, list, function>;
 
   ::std::ostream& operator<<(::std::ostream& out, expression const&) noexcept;
+
   ::std::string type_of(expression const&) noexcept;
+  bool has_ordering(expression const&) noexcept;
 
   // environment
 
   using unit_ptr = ::std::shared_ptr<struct unit>;
 
   using environment = 
-    ::std::pmr::unordered_map<string_representation, unit_ptr, str_hasher>;
-  using env_ptr = ::std::shared_ptr<environment>;
+    PMR_PREF::unordered_map<string_representation, unit_ptr, str_hasher>;
 
+  using env_ptr      = ::std::shared_ptr<environment>;
   using env_node_ptr = ::std::shared_ptr<struct env_node>;
 
   struct env_node {
@@ -60,15 +62,15 @@ namespace yl {
 
   struct list {
     bool q = false;
-    using children_type = ::std::pmr::vector<unit_ptr>;
-    children_type children{&mem_pool};
+    using children_type = seq_representation<unit_ptr>;
+    children_type children = make_seq<unit_ptr>();
   };
 
   using result_type = either<error_info, unit_ptr>;
 
   struct function {
     using type = ::std::function<result_type(unit_ptr const&, env_node_ptr&)>;
-    string_representation description{&mem_pool};
+    string_representation description = make_string();
     type func;
   };
 

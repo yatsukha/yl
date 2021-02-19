@@ -7,7 +7,9 @@
 namespace yl {
 
 #define BUILTIN(name, desc, bind) \
-  {{name, &mem_pool}, make_shared<unit>(unit{{0, 0}, function{{desc, &mem_pool}, bind}})} 
+  { \
+    make_string(name), \
+    make_shared<unit>(unit{{0, 0}, function{make_string(desc), bind}})} 
    
   env_node_ptr global_environment() noexcept {
     auto static g_env = make_shared(environment{{
@@ -103,7 +105,11 @@ namespace yl {
         "Converts an expression to string.",
         str_m
       ),
-    }, 1000, &mem_pool});
+    }, 1000
+#ifndef __EMSCRIPTEN__
+    , &mem_pool
+#endif
+  });
 
     return make_shared<env_node>(env_node{
       .curr = g_env,
