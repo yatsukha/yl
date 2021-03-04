@@ -1,4 +1,4 @@
-#include "src/yl/builtins.hpp"
+#include <cerrno>
 #include <iostream>
 #include <stdexcept>
 #include <cctype>
@@ -123,6 +123,12 @@ namespace yl {
       if (eptr != sptr + s.str.size()) {
         FAIL_WITH(
           "Invalid number format. Expected a signed integer.", 
+          (position{line_num, start + (eptr - sptr)})
+        );
+      } else if (errno == ERANGE) {
+        errno = 0;
+        FAIL_WITH(
+          "Given number does not fit into a 64bit signed integer.",
           (position{line_num, start + (eptr - sptr)})
         );
       }

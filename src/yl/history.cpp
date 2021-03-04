@@ -1,3 +1,4 @@
+#include "yl/mem.hpp"
 #include <yl/history.hpp>
 
 #ifndef __EMSCRIPTEN__
@@ -11,17 +12,17 @@ namespace yl {
   seq_representation<string_representation> history::lines;
 #endif
 
-  void history::append(char const* line) noexcept {
+  void history::append(string_representation const& line) noexcept {
 #ifdef __EMSCRIPTEN__
-    lines.push_back(make_string(line));
+    lines.push_back(line);
 #else
-    ::add_history(line); 
+    ::add_history(line.c_str()); 
 #endif
   }
 
-  char const* history::get(::std::size_t const idx) noexcept {
+  string_representation history::get(::std::size_t const idx) noexcept {
 #ifdef __EMSCRIPTEN__
-    return lines[idx].c_str();
+    return lines[idx];
 #else
     return ::history_list()[idx]->line;
 #endif

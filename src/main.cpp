@@ -12,28 +12,6 @@ namespace yl {
     return 0;
   }
 
-  auto handle_file(
-    ::std::ifstream&& file,
-    ::std::ostream& out,
-    ::std::ostream& err
-  ) noexcept {
-    while (!::yl::handle_line(
-      [&file] { 
-        ::std::size_t constexpr static buf_size = 1 << 13;
-        char* buf = reinterpret_cast<char*>(::malloc(buf_size));
-
-        if (file.getline(buf, buf_size)) {
-          return buf;
-        }
-        
-        ::free(buf);
-        return static_cast<char*>(nullptr);
-      }, 
-      0, out, err
-    ))
-      ;
-  }
-
 }
 
 int main(int const argc, char const* const* argv) {
@@ -42,18 +20,8 @@ int main(int const argc, char const* const* argv) {
   ::std::cout << "yatsukha's lisp" << "\n";
   ::std::cout << "^C to exit, 'help' to get started" << "\n";
 
-  ::std::string predef_name = ".predef.yl";
-  ::std::ifstream predef(predef_name);
-
-  if (predef.is_open()) {
-    ::std::ostream dev_null{nullptr};
-
-    ::std::cout << "detected predef at '" << predef_name
-                << "', reading..."
-                << "\n";
-
-    ::yl::handle_file(::std::move(predef), dev_null, ::std::cerr);
-  }
+  auto const predef = ::yl::load_predef();
+  ::std::cout << (predef.empty() ? "loaded predef" : predef) << "\n";
 
   ::std::ifstream input_file;
 

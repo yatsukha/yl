@@ -1,3 +1,4 @@
+#include <sstream>
 #include <yl/user_io.hpp>
 #include <yl/parse.hpp>
 #include <yl/eval.hpp>
@@ -145,6 +146,46 @@ namespace yl {
     }
 
     return false;
+  }
+
+  void handle_file(
+    ::std::ifstream&& file,
+    ::std::ostream& out,
+    ::std::ostream& err
+  ) noexcept {
+    while (!::yl::handle_line(
+      [&file] { 
+        ::std::size_t constexpr static buf_size = 1 << 13;
+        char* buf = reinterpret_cast<char*>(::malloc(buf_size));
+
+        if (file.getline(buf, buf_size)) {
+          return buf;
+        }
+        
+        ::free(buf);
+        return static_cast<char*>(nullptr);
+      }, 
+      0, out, err
+    ))
+      ;
+  }
+
+  string_representation load_predef(      
+    string_representation const& predef
+    ) noexcept {
+    ::std::ifstream in{predef.c_str()};
+    if (!in.is_open()) {
+      return make_string("could not open predef file");
+    }
+    ::std::stringstream ss;
+    ::std::ostream dev_null{nullptr};
+    handle_file(::std::move(in), dev_null, ss);
+
+    return make_string(
+      ss.str().size()
+        ? "errors in predef, please interpret it directly for more details"
+        : ""
+    );
   }
 
 }

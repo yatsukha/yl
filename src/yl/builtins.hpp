@@ -844,18 +844,36 @@ namespace yl {
     auto const& args = as_list(u->expr).children;
     ASSERT_ARG_COUNT(u, == 1);
     RAW_OR_ERROR(args[1]);
+
     auto const& str = as_string(args[1]->expr).str;
-    try {
-      SUCCEED_WITH(u->pos, ::std::stoll(str.c_str()));
-    } catch (::std::invalid_argument const&) {
-      FAIL_WITH(
-        concat("Could not convert '", str, "'to a 64bit signed integer."), 
-        args[1]->pos);
-    } catch (::std::out_of_range const&) {
-      FAIL_WITH(
-        concat("Could not convert '", str, "'to a 64bit signed integer."), 
-        args[1]->pos);
+
+    // non null char** required for strtoll
+    char* eptr = reinterpret_cast<char*>(1);
+    char const* sptr = str.c_str();
+
+    auto const n = ::std::strtoll(sptr, &eptr, 10);
+
+    if (eptr > sptr) {
+      if (eptr != sptr + str.size()) {
+        FAIL_WITH(
+          "Invalid number format. Expected a signed integer.", 
+          args[1]->pos
+        );
+      } else if (errno == ERANGE) {
+        errno = 0;
+        FAIL_WITH(
+          "Given number does not fit into a 64bit signed integer.",
+          args[1]->pos
+        );
+      }
+
+      SUCCEED_WITH(args[1]->pos, n);
     }
+
+    FAIL_WITH(
+      "Could not convert given number to a 64bit signed integer.", 
+      args[1]->pos
+    );
   }
 
   inline result_type str_m(unit_ptr const& u, env_node_ptr& env) noexcept {

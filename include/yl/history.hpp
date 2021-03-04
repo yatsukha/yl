@@ -12,8 +12,8 @@ namespace yl {
 #endif
 
    public:
-    static void append(char const*) noexcept;
-    static char const* get(::std::size_t const) noexcept;
+    static void append(string_representation const&) noexcept;
+    static string_representation get(::std::size_t const) noexcept;
     static ::std::size_t size() noexcept;
   };
 

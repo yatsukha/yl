@@ -1,5 +1,6 @@
 #pragma once
 
+#include <yl/mem.hpp>
 #include <yl/types.hpp>
 
 #include <ostream>
@@ -21,7 +22,6 @@ namespace yl {
     ::std::ostream& std_err
   ) noexcept; 
 
-
   // true if eof
   bool handle_line(
     ::std::function<char*()> line_supplier, 
@@ -29,5 +29,15 @@ namespace yl {
     ::std::ostream& out,
     ::std::ostream& err
   ) noexcept; 
+
+  void handle_file(
+    ::std::ifstream&& file,
+    ::std::ostream& out,
+    ::std::ostream& err
+  ) noexcept; 
+
+  string_representation load_predef(      
+    string_representation const& predef = make_string(".predef.yl")
+  ) noexcept;
 
 }

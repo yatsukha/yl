@@ -2,7 +2,7 @@
 
 def {fun} (
   \{args & body} 
-  "Helper function for \\. 'fun {add x y} {+ x y}' defines a function assigned to add. You can add a comment as well: 'fun {add x y} \"My binary add.\" {+ x y}' which will be shown when you enter 'help add'." 
+  "Helper function for \\. 'fun {add x y} {+ x y}' defines a function assigned to add.\nYou can add a comment as well: 'fun {add x y} \"My binary add.\" {+ x y}' which will be shown when you enter 'help add'." 
   {
     def (head args) (
       if (== 1 (len body)) {
