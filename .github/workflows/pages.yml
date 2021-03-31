@@ -7,7 +7,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        
       - uses: mymindstorm/setup-emsdk@v7
 
       - name: Verify
         run: emcc -v
+        
+      - name: Compile WASM
+        run: sh compile.sh
+      
+      - name: Verify result
+        run: ls -alh wasm
