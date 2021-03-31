@@ -15,7 +15,6 @@ namespace yl {
 }
 
 int main(int const argc, char const* const* argv) {
-  ::std::size_t skip_str(char const* line, ::std::size_t pos) noexcept;
   ::rl_bind_key('\t', ::yl::insert_spaces);
 
   ::std::cout << "yatsukha's lisp" << "\n";

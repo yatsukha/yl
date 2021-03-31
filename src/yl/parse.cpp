@@ -137,7 +137,7 @@ namespace yl {
 
     auto const n = ::std::strtoll(sptr, &eptr, 10);
 
-    if (eptr > sptr) {
+    if (eptr > sptr && (eptr - sptr > 1 || ::std::isdigit(*(sptr)))) {
       if (eptr != sptr + s.str.size()) {
         FAIL_WITH(
           "Invalid number format. Expected a signed integer.", 
