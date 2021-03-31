@@ -53,6 +53,16 @@ window.setTimeout(() => {
       this.ctx.fillText(this.buffer, 0, this.position.y);
       this.fillCursor();
     }
+
+    cls() {
+      this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+      this.position.y = this.textMetrics.charHeight;
+      this.position.col = this.prompt.length;
+
+      this.buffer = prompt;
+      this.ctx.fillText(this.buffer, 0, this.position.y);
+      this.fillCursor();
+    }
     
     setBlack() {
       this.ctx.fillStyle = 'black';
@@ -221,6 +231,7 @@ window.setTimeout(() => {
   term.echo("yatsukha's lisp");
   term.echo("use 'help' to get started, note that some features are currently missing from the web version");
   term.echo("press shift + enter to break an expression into multiple lines");
+  term.echo("use 'cls' to clear the screen");
   term.echo(Module.load_predef(".predef.yl").length ? "failed to load predef" : "loaded predef");
   term.echo("");
 
@@ -258,6 +269,12 @@ window.setTimeout(() => {
           if (event.shiftKey) {
             term.prompt = cont_prompt;
             storage += term.breakLine();
+            break;
+          }
+
+          const cmd = (storage + term.line).trim();
+          if (cmd == "cls") {
+            term.cls();
             break;
           }
 
