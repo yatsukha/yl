@@ -16,7 +16,7 @@ jobs:
         run: sh compile.sh
       
       - name: Verify result
-        run: ls -alh wasm
+        run: pwd && ls -alh wasm
         
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
