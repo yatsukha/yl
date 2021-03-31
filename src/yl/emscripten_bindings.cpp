@@ -13,9 +13,10 @@
 
 namespace yl {
 
-  ::std::string parse_eval(::std::string const str) noexcept {
+  ::std::string parse_eval(::std::string const str,
+                           bool const continuated = false) noexcept {
     ::std::stringstream ss; 
-    handle_input(str.c_str(), 0, 0, ss, ss);
+    handle_input(str.c_str(), 0, continuated, ss, ss);
     return ss.str();
   }
 

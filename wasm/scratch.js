@@ -124,7 +124,7 @@ window.setTimeout(() => {
     clear(offset = undefined) {
       if (!offset) this.clearCursor();
       this.ctx.clearRect(
-        (offset || this.prompt.length) * this.textMetrics.charWidth, 
+        (offset || this.prompt.length) * this.textMetrics.charWidth - 1, 
         this.position.y + this.cursor.negativeHeight, 			
         this.canvas.width, this.cursor.height * 2);
       if (!offset) {
@@ -158,6 +158,21 @@ window.setTimeout(() => {
       this.position.col = tmp;
       this.fillCursor();
     }
+
+    breakLine() {
+      const ret  = this.buffer.slice(this.prompt.length, this.position.col);
+      var indent = 0;
+      while (indent < ret.length && ret[indent] == ' ') {
+        ++indent;
+      }
+      const cont = ' '.repeat(indent) + this.buffer.slice(this.position.col);
+      this.clear(this.position.col);
+      this.newLine(true);
+      this.append(cont);
+      this.jump(-1000000);
+      this.jump(indent);
+      return ret;
+    }
     
     echo(str) {
       this.clearCursor();
@@ -174,17 +189,21 @@ window.setTimeout(() => {
     }
   };
 
-  const prompt = '> ';
+  const prompt = 'yl> ';
+  const cont_prompt = '... ';
   const term = new Terminal(prompt);
+  var storage = "";
   var historyIdx = -1;
   const matching = {
     '(': ')',
     '{': '}',
-    '[': ']'
+    '[': ']',
+    '"': '"'
   };
 
   term.echo("yatsukha's lisp");
   term.echo("use 'help' to get started, note that some features are currently missing from the web version");
+  term.echo("pressing enter in the middle of the line splits it in half, ctrl + enter (or enter at eol) submits the line for evaluation");
   term.echo(Module.load_predef(".predef.yl").length ? "failed to load predef" : "loaded predef");
 
   function preventDefault(event) {
@@ -218,15 +237,24 @@ window.setTimeout(() => {
           break;
         case 13:
           historyIdx = -1;
-          const lines = Module.parse_eval(term.line).split('\n');
-          term.newLine();
-          for (let i = 0; i < lines.length; ++i) {
-            // sigh
-            term.echo(
-              (lines.length > 1 && !i && lines[i].indexOf('^') != -1 
-                ? ' '.repeat(term.prompt.length)
-                : '')
-              + lines[i])
+          if (event.ctrlKey || term.position.col == term.buffer.length) {
+            console.log(storage + term.line);
+            const lines = 
+              Module.parse_eval(storage + term.line, storage.length != 0).split('\n');
+            storage = "";
+            term.prompt = prompt;
+            term.newLine();
+            for (let i = 0; i < lines.length; ++i) {
+              // sigh
+              term.echo(
+                (lines.length > 1 && !i && lines[i].indexOf('^') != -1 
+                  ? ' '.repeat(term.prompt.length)
+                  : '')
+                + lines[i])
+            }
+          } else {
+            term.prompt = cont_prompt;
+            storage += term.breakLine();
           }
           break;
         case 85:
@@ -238,9 +266,11 @@ window.setTimeout(() => {
           break;
         case 37:
           term.jump(-1);
+          preventDefault(event);
           break;
         case 39:
           term.jump(1);
+          preventDefault(event);
           break;
         case 38:
           if (historyIdx == -1) {

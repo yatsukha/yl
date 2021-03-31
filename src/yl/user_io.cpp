@@ -79,6 +79,8 @@ namespace yl {
         if (line[idx] == ';') {
           line[idx] = 0;
           return empty;
+        } else {
+          idx = skip_str(line, idx);
         }
 
         empty = empty && ::std::isblank(line[idx]);

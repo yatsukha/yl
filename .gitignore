@@ -1,8 +1,8 @@
 # added
 
-wasm/em_test.cpp
-wasm/out/main.js
-wasm/out/main.wasm
+
+*.js
+*.wasm
 aoc_bits/*interpreter
 aoc_bits/.*
 .cache/

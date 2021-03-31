@@ -42,11 +42,29 @@ namespace yl {
     return left_paren(c) ?: right_paren(c);
   }
 
+  ::std::size_t skip_str(char const* line, ::std::size_t pos) noexcept {
+    if (!line[pos] || line[pos] != '\"') {
+      return pos;
+    }
+    while (line[++pos] && line[pos] != '\"') {
+      if (line[pos] == '\\') {
+        ++pos;
+      }
+    }
+    return pos;
+  }
+
   int paren_balance(char const* line) noexcept {
     pos p = 0;
     int balance = 0;
 
     while (line[p]) {
+      if (line[p] == '\"') {
+        p = skip_str(line, p);
+        if (!line[p]) {
+          break;
+        }
+      }
       if (left_paren(line[p])) {
         --balance;
       } else if (right_paren(line[p])) {

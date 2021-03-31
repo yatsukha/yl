@@ -8,4 +8,6 @@ namespace yl {
 
   int paren_balance(char const* line) noexcept;
 
+  ::std::size_t skip_str(char const* line, ::std::size_t pos) noexcept;
+
 }
