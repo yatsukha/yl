@@ -1,0 +1,13 @@
+name: "emsdk"
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: mymindstorm/setup-emsdk@v7
+
+      - name: Verify
+        run: emcc -v
