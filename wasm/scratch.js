@@ -144,17 +144,8 @@ window.setTimeout(() => {
       if (this.position.y + this.cursor.height > pos + vh) {
         window.scroll(0, Math.max(0, this.position.y - vh + this.cursor.height));
       } else if (this.position.y < pos) {
-        console.log('xde');
         window.scroll(0, this.position.y - this.cursor.height);
       }
-      return;
-
-      
-      while (this.position.y > pos + vh) {
-        window.scrollBy(0, this.cursor.height);
-        pos = (window.pageYOffset || doc.scrollTop)  - (doc.clientTop || 0);
-      }
-      //while (this.position.)
     }
     
     newLine(echoed = false) {
