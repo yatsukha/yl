@@ -80,7 +80,7 @@ window.setTimeout(() => {
     
     clearCursor() {
       this.ctx.clearRect(
-        this.position.col * this.textMetrics.charWidth - 1, this.position.y + this.cursor.negativeHeight, 
+        this.position.col * this.textMetrics.charWidth - 0.5, this.position.y + this.cursor.negativeHeight, 
         this.cursor.width + 2, this.cursor.height * 2
       );
       if (this.position.col < this.buffer.length) {
@@ -105,6 +105,7 @@ window.setTimeout(() => {
       this.ctx.fillText(this.buffer.slice(this.position.col), this.position.col * this.textMetrics.charWidth, this.position.y);
       this.position.col += str.length;
       this.fillCursor();
+      this.focus();
     }
     
     pop() {
@@ -124,7 +125,7 @@ window.setTimeout(() => {
     clear(offset = undefined) {
       if (!offset) this.clearCursor();
       this.ctx.clearRect(
-        (offset || this.prompt.length) * this.textMetrics.charWidth - 1, 
+        (offset || this.prompt.length) * this.textMetrics.charWidth - 0.5, 
         this.position.y + this.cursor.negativeHeight, 			
         this.canvas.width, this.cursor.height * 2);
       if (!offset) {
@@ -132,6 +133,28 @@ window.setTimeout(() => {
         this.position.col = prompt.length;
         this.fillCursor();
       }
+    }
+
+    focus() {
+      const doc = document.documentElement;
+      const vh = 
+        Math.max(document.documentElement.clientHeight || 0, window.innerHeight || 0);
+     
+      var pos = (window.pageYOffset || doc.scrollTop)  - (doc.clientTop || 0);
+      if (this.position.y + this.cursor.height > pos + vh) {
+        window.scroll(0, Math.max(0, this.position.y - vh + this.cursor.height));
+      } else if (this.position.y < pos) {
+        console.log('xde');
+        window.scroll(0, this.position.y - this.cursor.height);
+      }
+      return;
+
+      
+      while (this.position.y > pos + vh) {
+        window.scrollBy(0, this.cursor.height);
+        pos = (window.pageYOffset || doc.scrollTop)  - (doc.clientTop || 0);
+      }
+      //while (this.position.)
     }
     
     newLine(echoed = false) {
@@ -150,6 +173,8 @@ window.setTimeout(() => {
       this.ctx.fillText(this.prompt, 0, this.position.y);
       this.append('');
       this.fillCursor();
+      
+      this.focus();
     }
     
     jump(offset) {
@@ -157,6 +182,7 @@ window.setTimeout(() => {
       this.clearCursor();
       this.position.col = tmp;
       this.fillCursor();
+      this.focus();
     }
 
     breakLine() {
@@ -203,8 +229,9 @@ window.setTimeout(() => {
 
   term.echo("yatsukha's lisp");
   term.echo("use 'help' to get started, note that some features are currently missing from the web version");
-  term.echo("pressing enter in the middle of the line splits it in half, ctrl + enter (or enter at eol) submits the line for evaluation");
+  term.echo("press shift + enter to break an expression into multiple lines");
   term.echo(Module.load_predef(".predef.yl").length ? "failed to load predef" : "loaded predef");
+  term.echo("");
 
   function preventDefault(event) {
     event.preventDefault();
@@ -237,24 +264,24 @@ window.setTimeout(() => {
           break;
         case 13:
           historyIdx = -1;
-          if (event.ctrlKey || term.position.col == term.buffer.length) {
-            console.log(storage + term.line);
-            const lines = 
-              Module.parse_eval(storage + term.line, storage.length != 0).split('\n');
-            storage = "";
-            term.prompt = prompt;
-            term.newLine();
-            for (let i = 0; i < lines.length; ++i) {
-              // sigh
-              term.echo(
-                (lines.length > 1 && !i && lines[i].indexOf('^') != -1 
-                  ? ' '.repeat(term.prompt.length)
-                  : '')
-                + lines[i])
-            }
-          } else {
+          if (event.shiftKey) {
             term.prompt = cont_prompt;
             storage += term.breakLine();
+            break;
+          }
+
+          const lines = 
+            Module.parse_eval(storage + term.line, storage.length != 0).split('\n');
+          storage = "";
+          term.prompt = prompt;
+          term.newLine();
+          for (let i = 0; i < lines.length; ++i) {
+            // sigh
+            term.echo(
+              (lines.length > 1 && !i && lines[i].indexOf('^') != -1 
+                ? ' '.repeat(term.prompt.length)
+                : '')
+              + lines[i])
           }
           break;
         case 85:
