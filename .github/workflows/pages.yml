@@ -1,0 +1,25 @@
+name: "emsdk"
+on:
+  push:
+    branches: [ master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+        
+      - uses: mymindstorm/setup-emsdk@v8
+        
+      - name: Compile WASM
+        run: sh compile.sh
+      
+      - name: Verify result
+        run: pwd && ls -alh wasm
+        
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./wasm
