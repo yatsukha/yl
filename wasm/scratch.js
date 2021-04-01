@@ -122,6 +122,8 @@ window.setTimeout(() => {
       if (this.position.col <= prompt.length) {
         return;
       }
+
+      const ret = this.buffer[this.position.col - 1];
       
       this.clear(this.position.col - 1);
       this.buffer = 
@@ -130,6 +132,8 @@ window.setTimeout(() => {
       --this.position.col;
       this.append('');
       this.fillCursor();
+
+      return ret;
     }
     
     clear(offset = undefined) {
@@ -258,8 +262,12 @@ window.setTimeout(() => {
     } else {
       switch (event.which) {
         case 8:
-          term.pop();
-          break;+ 1
+          const c = term.pop();
+          if (matching[c] && matching[c] == term.buffer[term.position.col]) {
+            term.jump(1);
+            term.pop();
+          }
+          break;
         case 9:
           term.append('  ');
           preventDefault(event);
