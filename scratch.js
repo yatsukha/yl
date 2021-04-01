@@ -90,7 +90,7 @@ window.setTimeout(() => {
     
     clearCursor() {
       this.ctx.clearRect(
-        this.position.col * this.textMetrics.charWidth - 0.5, this.position.y + this.cursor.negativeHeight, 
+        this.position.col * this.textMetrics.charWidth - 0.75, this.position.y + this.cursor.negativeHeight, 
         this.cursor.width + 2, this.cursor.height * 2
       );
       if (this.position.col < this.buffer.length) {
@@ -139,7 +139,7 @@ window.setTimeout(() => {
     clear(offset = undefined) {
       if (!offset) this.clearCursor();
       this.ctx.clearRect(
-        (offset || this.prompt.length) * this.textMetrics.charWidth - 0.5, 
+        (offset || this.prompt.length) * this.textMetrics.charWidth - 0.75, 
         this.position.y + this.cursor.negativeHeight, 			
         this.canvas.width, this.cursor.height * 2);
       if (!offset) {
@@ -224,6 +224,7 @@ window.setTimeout(() => {
   const cont_prompt = '... ';
   const term = new Terminal(prompt);
   var storage = "";
+  var parens = 0;
   var historyIdx = -1;
   const matching = {
     '(': ')',
@@ -274,11 +275,6 @@ window.setTimeout(() => {
           break;
         case 13:
           historyIdx = -1;
-          if (event.shiftKey) {
-            term.prompt = cont_prompt;
-            storage += term.breakLine();
-            break;
-          }
 
           const cmd = (storage + term.line).trim();
           if (cmd == "cls") {
@@ -286,9 +282,19 @@ window.setTimeout(() => {
             break;
           }
 
+          var balance = Module.paren_balance(term.line);
+
+          if (event.shiftKey || parens + balance != 0) {
+            term.prompt = cont_prompt;
+            storage += term.breakLine();
+            parens += balance;
+            break;
+          }
+
           const lines = 
             Module.parse_eval(storage + term.line, storage.length != 0).split('\n');
           storage = "";
+          parens = 0;
           term.prompt = prompt;
           term.newLine();
           for (let i = 0; i < lines.length; ++i) {
