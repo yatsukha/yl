@@ -309,6 +309,7 @@ window.setTimeout(() => {
         case 85:
           if (event.ctrlKey) {
             term.clear();
+            historyIdx = -1;
             preventDefault(event);
             return false;
           }
