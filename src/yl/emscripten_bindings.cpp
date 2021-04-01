@@ -10,6 +10,7 @@
 
 #include <yl/user_io.hpp>
 #include <yl/history.hpp>
+#include <yl/parse.hpp>
 
 namespace yl {
 
@@ -18,6 +19,10 @@ namespace yl {
     ::std::stringstream ss; 
     handle_input(str.c_str(), 0, continuated, ss, ss);
     return ss.str();
+  }
+
+  int paren_balance_wrapper(::std::string const str) noexcept {
+    return paren_balance(str.c_str());
   }
 
 }
@@ -32,6 +37,7 @@ EMSCRIPTEN_BINDINGS(yl) {
     .class_function("get", &::yl::history::get)
     .class_function("size", &::yl::history::size);
 
+  function("paren_balance", &::yl::paren_balance_wrapper);
   function("load_predef", &::yl::load_predef);
 }
 
