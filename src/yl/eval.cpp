@@ -105,6 +105,11 @@ namespace yl {
         "Converts an expression to string.",
         str_m
       ),
+      BUILTIN(
+        "mk_map",
+        "Creates a map from pairs, example input: {\"1\" 1 \"2\" 2}.",
+        mk_map_m
+      ),
     }, 1000
 #ifndef __EMSCRIPTEN__
     , &mem_pool

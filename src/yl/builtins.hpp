@@ -1,12 +1,12 @@
 #pragma once
 
-#include "yl/mem.hpp"
-#include "yl/util.hpp"
 #include <algorithm>
 #include <fstream>
-
 #include <iostream>
 #include <stdexcept>
+
+#include <yl/mem.hpp>
+#include <yl/util.hpp>
 #include <yl/types.hpp>
 #include <yl/eval.hpp>
 #include <yl/macros.hpp>
@@ -641,44 +641,11 @@ namespace yl {
    *
    */
 
-  inline result_type operator==(unit_ptr const& a, unit_ptr const& b) noexcept {
-    if (a.get() == b.get()) {
-      SUCCEED_WITH(a->pos, true);
-    }
-
-    if (a->expr.index() != b->expr.index()) {
-      SUCCEED_WITH(a->pos, false);
-    }
-
-    if (is_numeric(a->expr)) {
-      SUCCEED_WITH(a->pos, as_numeric(a->expr) == as_numeric(b->expr));
-    }
-
-    if (is_string(a->expr)) {
-      auto const& sa = as_string(a->expr);
-      auto const& sb = as_string(b->expr);
-      SUCCEED_WITH(a->pos, sa.raw == sb.raw && sa.str == sb.str);
-    }
-
-    if (is_list(a->expr)) {
-      auto const& al = as_list(a->expr);
-      auto const& bl = as_list(b->expr);
-
-      SUCCEED_WITH(a->pos, al.q == bl.q && al.children == bl.children);
-    }
-    
-    FAIL_WITH("Function comparison is unsupported.", a->pos);
-  }
-
   inline result_type equal_m(unit_ptr const& u, env_node_ptr& env) noexcept {
     auto const& args = as_list(u->expr).children;
     ASSERT_ARG_COUNT(u, == 2);
-    auto ret = args[1] == args[2];
-    RETURN_IF_ERROR(ret);
-    ret.value()->pos = u->pos;
-    return ret;
+    SUCCEED_WITH(u->pos, args[1] == args[2]);
   }
-
 
   inline result_type not_equal_m(unit_ptr const& u, env_node_ptr& env) noexcept {
     auto ret = equal_m(u, env);
@@ -879,6 +846,9 @@ namespace yl {
   inline result_type str_m(unit_ptr const& u, env_node_ptr& env) noexcept {
     auto const& args = as_list(u->expr).children;
     ASSERT_ARG_COUNT(u, == 1);
+    if (is_string(args[1]->expr)) {
+      return succeed(args[1]);
+    }
     SUCCEED_WITH(u->pos, (string{.str = concat(args[1]->expr), .raw = true}));
   }
 
@@ -953,13 +923,29 @@ namespace yl {
   inline result_type err_m(unit_ptr const& u, env_node_ptr& env) noexcept {
     auto const& args = as_list(u->expr).children;
     ASSERT_ARG_COUNT(u, == 1);
-    if (!is_raw(args[1])) {
+    FAIL_WITH(as_string(str_m(u, env).value()->expr).str, args[1]->pos);
+  }
+
+  inline result_type mk_map_m(unit_ptr const& u, env_node_ptr& env) noexcept {
+    auto const& args = as_list(u->expr).children;
+    ASSERT_ARG_COUNT(u, == 1);
+    Q_OR_ERROR(args[1]);
+
+    auto const& mappings = as_list(args[1]->expr);
+    if (mappings.children.size() % 2) {
       FAIL_WITH(
-        "Expected a raw error string",
-        args[1]->pos
-      );
+        "Map requires key value pairings, ie. an even number of elements.", 
+        args[1]->pos);
     }
-    FAIL_WITH(as_string(args[1]->expr).str, args[1]->pos);
+
+    hash_map ret;
+
+    for (::std::size_t i = 0; i < mappings.children.size(); i += 2) {
+      // no transient..
+      ret = ret.insert({mappings.children[i], mappings.children[i + 1]});
+    }
+
+    SUCCEED_WITH(unit{u->pos, expression{ret}});
   }
 
 }

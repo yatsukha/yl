@@ -196,7 +196,7 @@ namespace yl {
     typename E, typename S, typename SS,
     typename = ::std::enable_if_t<!::std::is_same_v<void, SS>>
   >
-  inline either<E, SS> map(
+  inline either<E, SS> map_to(
     either<E, S> const& e,
     ::std::function<SS(S const&)> const& f
   ) noexcept {

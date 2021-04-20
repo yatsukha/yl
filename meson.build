@@ -12,6 +12,7 @@ executable(
   ],
   include_directories: [
     'include',
+    'immer',
   ],
   override_options: [
     'cpp_std=c++17',

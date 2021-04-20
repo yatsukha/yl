@@ -6,12 +6,24 @@
 #include <utility>
 #include <variant>
 
+#include <immer/map.hpp>
+#include <immer/map_transient.hpp>
+
 #include <yl/either.hpp>
 #include <yl/mem.hpp>
 
 namespace yl {
 
   // base types
+
+  // holds a type and metadata
+  struct unit;
+  using unit_ptr = ::std::shared_ptr<unit>;
+
+  // struct
+  struct unit_hasher {
+    ::std::size_t operator()(unit_ptr const&) const noexcept;
+  };
 
   struct string {
     string_representation str = make_string();
@@ -21,17 +33,19 @@ namespace yl {
   struct list;
   struct function;
   using numeric = ::std::int64_t;
+  // TODO: should map be a subclass of list?
+  // TODO: rethink the whole variant thing >.>
+  using hash_map = ::immer::map<unit_ptr, unit_ptr, unit_hasher>;
 
-  using expression = ::std::variant<numeric, string, list, function>;
+  using expression = ::std::variant<numeric, string, list, function, hash_map>;
 
   ::std::ostream& operator<<(::std::ostream& out, expression const&) noexcept;
+  bool operator==(unit_ptr const&, unit_ptr const&) noexcept;
 
   ::std::string type_of(expression const&) noexcept;
   bool has_ordering(expression const&) noexcept;
 
   // environment
-
-  using unit_ptr = ::std::shared_ptr<struct unit>;
 
   using environment = 
     PMR_PREF::unordered_map<string_representation, unit_ptr, str_hasher>;

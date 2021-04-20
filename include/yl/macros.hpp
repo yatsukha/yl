@@ -16,6 +16,7 @@ namespace yl {
   DEF_CAST(string);
   DEF_CAST(function);
   DEF_CAST(list);
+  DEF_CAST(hash_map);
 
 #define DEF_TYPE_CHECK(type) \
   inline bool is_##type(expression const& expr) noexcept { \
@@ -26,6 +27,7 @@ namespace yl {
   DEF_TYPE_CHECK(string);
   DEF_TYPE_CHECK(function);
   DEF_TYPE_CHECK(list);
+  DEF_TYPE_CHECK(hash_map);
 
 #define SUCCEED_WITH(pos, expr) \
   return succeed(make_shared<unit>(pos, expr));
