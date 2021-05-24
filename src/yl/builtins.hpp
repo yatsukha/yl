@@ -26,6 +26,14 @@ namespace yl {
     return is_string(u->expr) && as_string(u->expr).raw;
   }
 
+#define NUMERIC_OR_ERROR(unit_ptr) \
+  if (!is_numeric(unit_ptr->expr)) {\
+    return fail(error_info{ \
+      concat("Expected a number got ", type_of(unit_ptr->expr), "."), \
+       unit_ptr->pos \
+    });  \
+  }
+
 #define Q_OR_ERROR(unit_ptr) \
   if (!is_q(unit_ptr)) {\
     return fail(error_info{ \
@@ -275,44 +283,40 @@ namespace yl {
 
     ASSERT_ARG_COUNT(u, == 2);
 
-    if (!is_numeric(args[1]->expr)) {
-      FAIL_WITH("Expected an index.", args[1]->pos);
-    }
-
-    auto const idx = as_numeric(args[1]->expr);
-
-    if (idx < 0) {
-      FAIL_WITH("Expected a non negative number.", args[1]->pos);
-    }
-
-    bool q;
-    if (!(q = is_q(args[2])) && !is_raw(args[2])) {
-      FAIL_WITH("Expected a Q expression or a raw string.", args[2]->pos);
-    }
-
-
-    if (q) {
-      auto const& ls = as_list(args[2]->expr).children;
-      if (static_cast<::std::size_t>(idx) >= ls.size()) {
-        FAIL_WITH(concat("Index ", idx, " is out of bounds."),  
-                  args[1]->pos);
+    if (is_q(args[2])) {
+      NUMERIC_OR_ERROR(args[1]); 
+      auto const idx = static_cast<::std::size_t>(as_numeric(args[1]->expr));
+      auto& ls = as_list(args[2]->expr);
+      if (idx < 0 || idx >= ls.children.size()) {
+        FAIL_WITH(
+          concat("Index ", idx, " is out of bounds."), 
+          args[1]->pos);
       }
-
-      list ret{.q = true};
-      ret.children.push_back(ls[idx]);
-
-      SUCCEED_WITH(u->pos, ret);
+      return succeed(ls.children[idx]);
     }
 
-    auto const& str = as_string(args[2]->expr).str;
-    if (static_cast<::std::size_t>(idx) >= str.length()) {
-      FAIL_WITH(concat("Index ", idx, " is out of bounds."), 
-                args[1]->pos);
+    if (is_raw(args[2])) {
+      NUMERIC_OR_ERROR(args[1]); 
+      auto const idx = static_cast<::std::size_t>(as_numeric(args[1]->expr));
+      auto& str = as_string(args[2]->expr);
+      if (idx < 0 || idx >= str.str.size()) {
+        FAIL_WITH(
+          concat("Index ", idx, " is out of bounds."), 
+          args[1]->pos);
+      }
+      SUCCEED_WITH(u->pos, (string{make_string(str.str.substr()), true}));
     }
-    string ret{.raw = true};
-    ret.str += str[idx];
 
-    SUCCEED_WITH(u->pos, ret);
+    if (is_hash_map(args[2]->expr)) {
+      auto& m = as_hash_map(args[2]->expr);
+      // empty
+      if (!m.count(args[1])) {
+        SUCCEED_WITH(u->pos, (list{true, make_seq<unit_ptr>()}));  
+      }
+      return succeed(m.at(args[1]));
+    }
+
+    FAIL_WITH("Expected a raw string, hash map or a Q expression.", args[2]->pos);
   }
 
   inline result_type len_m(unit_ptr const& u, env_node_ptr& node) noexcept {
@@ -320,17 +324,21 @@ namespace yl {
 
     ASSERT_ARG_COUNT(u, == 1);
 
-    bool q;
-    if (!(q = is_q(args[1])) && !is_raw(args[1])) {
-      FAIL_WITH("Expected a Q expression or a raw string.", args[1]->pos);
+    if (is_q(args[1])) {
+      SUCCEED_WITH(u->pos, numeric(as_list(args[1]->expr).children.size()));
     }
 
-    SUCCEED_WITH(
-      u->pos, 
-      numeric(q 
-        ? as_list(args[1]->expr).children.size() 
-        : as_string(args[1]->expr).str.size())
-    );
+    if (is_raw(args[1])) {
+      SUCCEED_WITH(u->pos, numeric(as_string(args[1]->expr).str.size()));
+    }
+
+    if (is_hash_map(args[1]->expr)) {
+      SUCCEED_WITH(u->pos, numeric(as_hash_map(args[1]->expr).size()));
+    }
+
+    FAIL_WITH(
+      "Expected a Q expression, hash map, or raw string.", 
+      args[1]->pos);
   }
  
   inline result_type def_m(unit_ptr const& u, env_node_ptr& node) noexcept {

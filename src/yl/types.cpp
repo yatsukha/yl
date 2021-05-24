@@ -29,6 +29,7 @@ namespace yl {
         out << "{";
         for (auto const& [k, v] : m) {
           out << "\n"
+              << "  "
               << k->expr
               << " -> "
               << v->expr;
