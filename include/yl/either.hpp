@@ -26,6 +26,15 @@ namespace yl {
 
   }
 
+  template<typename E, typename S>
+  class either;
+
+  template<typename S, typename SS = ::std::remove_reference_t<S>>
+  [[nodiscard]] inline either<void, SS> succeed(S s) noexcept;
+
+  [[nodiscard]] inline either<void, void> succeed() noexcept;
+
+
   template<typename E, typename S = void>
   class either {
     using ti_E = detail::custom_type_info_t<E>;
@@ -172,13 +181,80 @@ namespace yl {
         }
       }
     }
+
+    // quality of life additions
+    // maps
+    template<
+      typename F, 
+      typename SS = S, 
+      typename NewS = ::std::invoke_result_t<F, SS>
+    >
+    [[nodiscard]] ::std::enable_if_t<!::std::is_same_v<void, SS>, either<E, NewS>> 
+    map(F&& f) const noexcept {
+      if (!is_error()) {
+        if constexpr(!::std::is_same_v<void, NewS>) {
+          return succeed(f(this->value()));
+        } else {
+          f(this->value());
+          return succeed();
+        }
+      }
+      return *this;
+    }
+
+    template<
+      typename F, 
+      typename SS = S, 
+      typename NewS = ::std::invoke_result_t<F>
+    >
+    [[nodiscard]] either<E, NewS> map(F&& f) const noexcept {
+      if (!is_error()) {
+        if constexpr(!::std::is_same_v<void, NewS>) {
+          return succeed(f());
+        } else {
+          f();
+          return succeed();
+        }
+      }
+      return *this;
+    }
+
+    // flatmaps
+    template<
+      typename F, 
+      typename EE = E,
+      typename SS = S, 
+      typename NewS = ::std::invoke_result_t<F, SS>,
+      typename = ::std::enable_if_t<::std::is_convertible_v<either<EE, SS>, NewS>>
+    >
+    [[nodiscard]] ::std::enable_if_t<!::std::is_same_v<void, SS>, NewS> 
+    flat_map(F&& f) const noexcept {
+      if (!is_error()) {
+        return f(this->value());
+      }
+      return *this;
+    }
+
+    template<
+      typename F, 
+      typename EE = E,
+      typename SS = S, 
+      typename NewS = ::std::invoke_result_t<F>,
+      typename = ::std::enable_if_t<::std::is_convertible_v<either<EE, SS>, NewS>>
+    >
+    [[nodiscard]] NewS flat_map(F&& f) const noexcept {
+      if (!is_error()) {
+        return f();
+      }
+      return *this;
+    }
   };
 
   [[nodiscard]] inline either<void, void> succeed() noexcept {
     return either<void, void>{false};
   }
  
-  template<typename S, typename SS = ::std::remove_reference_t<S>>
+  template<typename S, typename SS>
   [[nodiscard]] inline either<void, SS> succeed(S s) noexcept {
     either<void, SS> e{false};
     new (e.data) SS{::std::move(s)};
