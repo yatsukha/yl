@@ -241,7 +241,7 @@ namespace yl {
     bool q;
 
     if (!(q = is_q(args[1])) && !is_raw(args[1])) {
-      FAIL_WITH("Tail expects a Q expression or a raw string as an argument.", 
+      FAIL_WITH("Join expects a Q expression or a raw string as an argument.", 
                 args[1]->pos);
     }
 
@@ -304,7 +304,7 @@ namespace yl {
           concat("Index ", idx, " is out of bounds."), 
           args[1]->pos);
       }
-      SUCCEED_WITH(u->pos, (string{make_string(str.str.substr()), true}));
+      SUCCEED_WITH(u->pos, (string{make_string(str.str.substr(idx, 1)), true}));
     }
 
     if (is_hash_map(args[2]->expr)) {
