@@ -48,4 +48,15 @@ namespace yl {
   template<typename V, typename T>
   using append_t = typename append<V, T>::type;
 
+  template<typename F>
+  auto make_scope_guard(F&& f) noexcept {
+    auto deleter = [self = ::std::forward<F>(f)](auto&&) {
+      self();
+    };
+    return ::std::unique_ptr<void, decltype(deleter)>{
+      reinterpret_cast<void*>(-1),
+      ::std::move(deleter)
+    };
+  }
+
 }
