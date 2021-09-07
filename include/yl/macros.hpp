@@ -77,13 +77,18 @@
     inline auto constexpr identity = identity_t{};
 
     inline error_either<list> cast_q(unit_ptr const& u) noexcept {
-      auto err = static_cast<error_either<list>>(fail(error_info{
+      auto err = fail(error_info{
         concat("Expected Q expression, got ", type_of(u->expr), ", with value ", u->expr, "."),
         u->pos
-      }));
+      });
       return cast_list(u).collect(
         [err](auto&&) { return err; },
-        [err](auto&& ls) { return ls.q ? succeed(ls) : err; }
+        [err](auto&& ls) -> error_either<list> {
+          if (ls.q) {
+            return succeed(ls);
+          }
+          return err;
+        }
       );
     }
 
