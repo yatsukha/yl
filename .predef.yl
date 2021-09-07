@@ -128,5 +128,5 @@ fun {at_eval x xs} {eval (at x xs)}
     (if (== 0 (len cases)) {err "Cases must contain at least a default case."})
     (= {idx} (index_of (\{x} {== value (eval (head x))}) (init cases)))
     (if (!= idx -1)
-      {tail (at_eval idx cases)}
+      {eval (tail (at idx cases))}
       {eval (last cases)})})

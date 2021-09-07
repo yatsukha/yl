@@ -72,7 +72,7 @@ int main(int const argc, char const* const* argv) {
       [i = 0, &prompt, &continuation_prompt]() mutable {
         return ::readline((i++ ? continuation_prompt : prompt).c_str());
       }, 
-      prompt.size(), 
+      prompt.size(),
       ::std::cout,
       ::std::cerr
     )) {

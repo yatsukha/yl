@@ -13,7 +13,7 @@
 namespace yl {
   
   template<typename... Args>
-  inline void terminate_with(Args&& ...args) noexcept {
+  [[noreturn]] inline void terminate_with(Args&& ...args) noexcept {
     (..., (::std::cerr << args << " ")) << ::std::endl; // flush
     ::std::exit(EXIT_FAILURE);
   }

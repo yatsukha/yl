@@ -80,7 +80,9 @@ namespace yl {
     children_type children = make_seq<unit_ptr>();
   };
 
-  using result_type = either<error_info, unit_ptr>;
+  template<typename Result>
+  using error_either = either<error_info, Result>;
+  using result_type = error_either<unit_ptr>;
 
   struct function {
     using type = ::std::function<result_type(unit_ptr const&, env_node_ptr&)>;

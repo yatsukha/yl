@@ -7,6 +7,15 @@
 
 namespace yl {
 
+  template<typename E, typename S>
+  class either;
+
+  template<typename S, typename SS = ::std::remove_reference_t<S>>
+  [[nodiscard]] inline either<void, SS> succeed(S s) noexcept;
+
+  [[nodiscard]] inline either<void, void> succeed() noexcept;
+
+
   namespace detail {
 
     template<typename T>
@@ -24,16 +33,55 @@ namespace yl {
     template<typename T>
     using custom_type_info_t = custom_type_info<T>;
 
+    template<typename F, typename T>
+    constexpr auto get_invoke_result() noexcept {
+      if constexpr (::std::is_same_v<T, void>) {
+        return ::std::invoke_result<F>{};
+      } else {
+        return ::std::invoke_result<F, T>{};
+      }
+    }
+
+    template<typename F, typename T>
+    using invoke_result_t = typename decltype(get_invoke_result<F, T>())::type;
+
+    template<typename U, typename V>
+    struct common_either;
+
+    template<typename E, typename S>
+    struct common_either<either<E, S>, either<E, S>> {
+      using type = either<E, S>;
+    };
+
+    template<typename E, typename S>
+    struct common_either<either<E, void>, either<void, S>> {
+      using type = either<E, S>;
+    };
+
+    template<typename E, typename S>
+    struct common_either<either<E, void>, either<E, S>> {
+      using type = either<E, S>;
+    };
+
+    template<typename E, typename S>
+    struct common_either<either<void, S>, either<E, void>> {
+      using type = either<E, S>;
+    };
+
+    template<typename E, typename S>
+    struct common_either<either<E, S>, either<void, S>> {
+      using type = either<E, S>;
+    };
+
+    template<typename E, typename S>
+    struct common_either<either<E, S>, either<E, void>> {
+      using type = either<E, S>;
+    };
+
+    template<typename... Ts>
+    using common_either_t = typename common_either<Ts...>::type;
+
   }
-
-  template<typename E, typename S>
-  class either;
-
-  template<typename S, typename SS = ::std::remove_reference_t<S>>
-  [[nodiscard]] inline either<void, SS> succeed(S s) noexcept;
-
-  [[nodiscard]] inline either<void, void> succeed() noexcept;
-
 
   template<typename E, typename S = void>
   class either {
@@ -112,7 +160,7 @@ namespace yl {
       return *this;
     }
 
-    template<typename EE>
+    template<typename EE, typename OE = E, typename = ::std::enable_if_t<::std::is_same_v<void, OE>>>
     operator either<EE, S>() const noexcept {
       if (is_error()) {
         terminate_with("Invalid widening from an error value.");
@@ -125,7 +173,7 @@ namespace yl {
       return ret;
     }
 
-    template<typename SS>
+    template<typename SS, typename OS = S, typename = ::std::enable_if_t<::std::is_same_v<void, OS>>>
     operator either<E, SS>() const noexcept {
       if (!is_error()) {
         terminate_with("Invalid widening from a success value.");
@@ -224,29 +272,50 @@ namespace yl {
       typename F, 
       typename EE = E,
       typename SS = S, 
-      typename NewS = ::std::invoke_result_t<F, SS>,
-      typename = ::std::enable_if_t<::std::is_convertible_v<either<EE, SS>, NewS>>
+      typename NewS = detail::common_either_t<::std::invoke_result_t<F, SS>, either<EE, void>>
     >
     [[nodiscard]] ::std::enable_if_t<!::std::is_same_v<void, SS>, NewS> 
     flat_map(F&& f) const noexcept {
       if (!is_error()) {
         return f(this->value());
       }
-      return *this;
+      return fail(this->error());
     }
 
     template<
       typename F, 
       typename EE = E,
       typename SS = S, 
-      typename NewS = ::std::invoke_result_t<F>,
-      typename = ::std::enable_if_t<::std::is_convertible_v<either<EE, SS>, NewS>>
+      typename NewS = detail::common_either_t<::std::invoke_result_t<F>, either<EE, void>>
     >
     [[nodiscard]] NewS flat_map(F&& f) const noexcept {
       if (!is_error()) {
         return f();
       }
-      return *this;
+      return fail(this->error());
+    }
+
+    // TODO: add for common types. not just either results?
+    template<
+      typename F1,
+      typename F2,
+      typename R1 = detail::invoke_result_t<F1, E>,
+      typename R2 = detail::invoke_result_t<F2, S>,
+      typename C  = detail::common_either_t<R1, R2>
+    >
+    [[nodiscard]] C collect(F1&& f1, F2&& f2) const noexcept {
+      if (is_error()) {
+        if constexpr (::std::is_same_v<void, E>) {
+          return f1();
+        } else {
+          return f1(this->error());
+        }
+      }
+      if constexpr (::std::is_same_v<void, S>) {
+        return f2();
+      } else {
+        return f2(this->value());
+      }
     }
   };
 

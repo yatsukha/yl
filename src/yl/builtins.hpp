@@ -67,11 +67,11 @@ namespace yl {
   inline result_type name##_m(unit_ptr const& u, env_node_ptr&) noexcept { \
     auto const& args = as_list(u->expr).children; \
     ASSERT_ARG_COUNT(u, >= 1); \
-    auto first = numeric_or_error(args[1]); \
+    auto first = cast_numeric(args[1]); \
     RETURN_IF_ERROR(first); \
     numeric result = first.value(); \
     for (::std::size_t idx = 2; idx < args.size(); ++idx) { \
-      auto noe = numeric_or_error(args[idx]); \
+      auto noe = cast_numeric(args[idx]); \
       RETURN_IF_ERROR(noe); \
       result operation##= noe.value(); \
     } \
@@ -95,9 +95,7 @@ namespace yl {
     auto const& args = as_list(u->expr).children;
 
     ASSERT_ARG_COUNT(u, == 1);
-    Q_OR_ERROR(args[1]);
-
-    return eval(args[1], node, true);
+    return cast_q(args[1]).flat_map([&](auto&&) { return eval(args[1], node, true); });
   }
 
   inline result_type list_m(unit_ptr const& u, env_node_ptr& node) noexcept {
@@ -270,12 +268,10 @@ namespace yl {
     auto const& args = as_list(u->expr).children;
 
     ASSERT_ARG_COUNT(u, == 2);
-    Q_OR_ERROR(args[2]);
-
-    list other = as_list(args[2]->expr);
-    other.children.insert(other.children.begin(), args[1]);
-
-    SUCCEED_WITH(u->pos, ::std::move(other));
+    return cast_q(args[2]).flat_map([&](auto other) {
+      other.children.insert(other.children.begin(), args[1]);
+      SUCCEED_WITH(u->pos, ::std::move(other));
+    });
   }
 
   inline result_type at_m(unit_ptr const& u, env_node_ptr& node) noexcept {
