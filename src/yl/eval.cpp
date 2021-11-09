@@ -28,7 +28,9 @@ namespace yl {
       BUILTIN("^", "Binary xor.", xor_m),
       BUILTIN("<<", "Shift left.", shl_m),
       BUILTIN(">>", "Shift right.", shr_m),
-      BUILTIN_MACRO("'", "Creates a Q expression?", quote_m),
+      BUILTIN_MACRO("q",     "Creates a Q expression?", quote_m),
+      BUILTIN_MACRO("quote", "Creates a Q expression?", quote_m),
+      BUILTIN("e",    "Evaluates a Q expression.", eval_m),
       BUILTIN("eval", "Evaluates a Q expression.", eval_m),
       BUILTIN("list", "Takes arguments and turns them into a Q expression.", list_m),
       BUILTIN("head", "Returns the first element of a list or a string.", head_m),
@@ -69,13 +71,18 @@ namespace yl {
         "Splits a raw string using a delimiter.",
         split_m
       ),
-      BUILTIN(
+      BUILTIN_MACRO(
         "\\", 
         "Lambda function, takes a Q expression with symbols as arguments "
         "and a Q expression as a body to evaluate. Returns a callable function.\n"
         "For example '(\\{x y} {+ x y}) 2 3' will yield 5.\n"
         "It can also take a docstring: '\\{x y} \"add\" {+ x y}'.",
         lambda_m
+      ),
+      BUILTIN_MACRO(
+        "\\m", 
+        "Macro function. Same as \\ but does not evaluate arguments.",
+        macro_m
       ),
       BUILTIN("help", "Outputs information about a symbol.", help_m),
       BUILTIN("==", "Compares arguments for equality.", equal_m),
@@ -244,7 +251,6 @@ namespace yl {
       auto const& fn = as_function(ls.children.front()->expr);
 
       if (!fn.macro) {
-        ::std::cout << fn.description << " >> is not a macro? " << "\n";
         for (::std::size_t i = 1; i < ls.children.size(); ++i) {
           auto& child = ls.children[i];
           auto new_child = eval(child, node);

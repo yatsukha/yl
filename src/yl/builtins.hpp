@@ -34,6 +34,14 @@ namespace yl {
     });  \
   }
 
+#define LIST_OR_ERROR(unit_ptr) \
+  if (!is_list(unit_ptr->expr)) {\
+    return fail(error_info{ \
+      concat("Expected a Q expression got ", type_of(unit_ptr->expr), "."), \
+       unit_ptr->pos \
+    });  \
+  }
+
 #define Q_OR_ERROR(unit_ptr) \
   if (!is_q(unit_ptr)) {\
     return fail(error_info{ \
@@ -100,7 +108,7 @@ namespace yl {
     auto const& args = as_list(u->expr).children;
 
     ASSERT_ARG_COUNT(u, == 1);
-    return cast_q(args[1]).flat_map([&](auto&&) { return eval(args[1], node, true); });
+    return eval(args[1], node, true);
   }
 
   inline result_type list_m(unit_ptr const& u, env_node_ptr& node) noexcept {
@@ -563,18 +571,18 @@ namespace yl {
     ASSERT_ARG_COUNT(u, >= 2);
     ASSERT_ARG_COUNT(u, <= 3);
 
-    Q_OR_ERROR(args[1]);
+    LIST_OR_ERROR(args[1]);
 
     auto doc_string = make_string("User defined function.");
 
     if (args.size() == 4) {
-      Q_OR_ERROR(args[3]);
+      LIST_OR_ERROR(args[3]);
       if (!is_string(args[2]->expr) || !as_string(args[2]->expr).raw) {
         FAIL_WITH("Expected a raw doc-string.", args[2]->pos);
       }
       doc_string = as_string(args[2]->expr).str;
     } else {
-      Q_OR_ERROR(args[2]);
+      LIST_OR_ERROR(args[2]);
     }
 
     auto const& arglist = as_list(args[1]->expr);
@@ -614,6 +622,13 @@ namespace yl {
         .func = create_function(variadic, unused, arglist, body, node)
       })
     );
+  }
+
+  inline result_type macro_m(unit_ptr const& u, env_node_ptr& env) noexcept {
+    return lambda_m(u, env).map([](unit_ptr u) { 
+      as_function(u->expr).macro = true;
+      return u;
+    });
   }
 
   inline result_type help_m(unit_ptr const& u, env_node_ptr& env) noexcept {

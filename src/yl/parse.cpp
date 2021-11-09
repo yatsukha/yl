@@ -124,8 +124,13 @@ namespace yl {
     }
 
     pos const start = curr;
-    while (!is_eof(line, curr) && !::std::isblank(line[curr]) 
-            && !paren(line[curr])) {
+    
+    if (line[curr] != '\'') {
+      while (!is_eof(line, curr) && !::std::isblank(line[curr]) 
+              && !paren(line[curr])) {
+        ++curr;
+      }
+    } else {
       ++curr;
     }
 
