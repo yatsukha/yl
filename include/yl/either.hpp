@@ -53,6 +53,16 @@ namespace yl {
       using type = either<E, S>;
     };
 
+    template<typename E>
+    struct common_either<either<E, void>, either<E, void>> {
+      using type = either<E, void>;
+    };
+
+    template<typename S>
+    struct common_either<either<void, S>, either<void, S>> {
+      using type = either<void, S>;
+    };
+
     template<typename E, typename S>
     struct common_either<either<E, void>, either<void, S>> {
       using type = either<E, S>;
@@ -303,7 +313,7 @@ namespace yl {
       typename R2 = detail::invoke_result_t<F2, S>,
       typename C  = detail::common_either_t<R1, R2>
     >
-    [[nodiscard]] C collect(F1&& f1, F2&& f2) const noexcept {
+    [[nodiscard]] C collect_flat(F1&& f1, F2&& f2) const noexcept {
       if (is_error()) {
         if constexpr (::std::is_same_v<void, E>) {
           return f1();
@@ -315,6 +325,29 @@ namespace yl {
         return f2();
       } else {
         return f2(this->value());
+      }
+    }
+
+    
+    template<
+      typename F1,
+      typename F2,
+      typename R1 = detail::invoke_result_t<F1, E>,
+      typename R2 = detail::invoke_result_t<F2, S>,
+      typename C  = ::std::common_type_t<R1, R2>
+    >
+    [[nodiscard]] either<E, C> collect(F1&& f1, F2&& f2) const noexcept {
+      if (is_error()) {
+        if constexpr (::std::is_same_v<void, E>) {
+          return succeed(static_cast<C>(f1()));
+        } else {
+          return succeed(static_cast<C>(f1(this->error())));
+        }
+      }
+      if constexpr (::std::is_same_v<void, S>) {
+        return succeed(static_cast<C>(f2()));
+      } else {
+        return succeed(static_cast<C>(f2(this->value())));
       }
     }
   };

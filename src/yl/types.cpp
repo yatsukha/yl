@@ -1,5 +1,5 @@
 #include <yl/types.hpp>
-#include <yl/macros.hpp>
+#include <yl/type_operations.hpp>
 
 namespace yl {
 
@@ -52,17 +52,6 @@ namespace yl {
       [](hash_map) { return "map"; }
     }, e);
   }
-
-  bool has_ordering(expression const& e) noexcept {
-    return ::std::visit(overloaded {
-      [](numeric) { return true; },
-      [](string) { return true; },
-      [](function) { return false; },
-      [](list) { return false; },
-      [](hash_map) { return false; }
-    }, e);
-  }
-
 
   bool operator==(unit_ptr const& a, unit_ptr const& b) noexcept {
     if (a.get() == b.get()) {

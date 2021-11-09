@@ -33,8 +33,6 @@ namespace yl {
   struct list;
   struct function;
   using numeric = ::std::int64_t;
-  // TODO: should map be a subclass of list?
-  // TODO: rethink the whole variant thing >.>
   using hash_map = ::immer::map<unit_ptr, unit_ptr, unit_hasher>;
 
   using expression = ::std::variant<numeric, string, list, function, hash_map>;
@@ -43,7 +41,6 @@ namespace yl {
   bool operator==(unit_ptr const&, unit_ptr const&) noexcept;
 
   ::std::string type_of(expression const&) noexcept;
-  bool has_ordering(expression const&) noexcept;
 
   // environment
 
@@ -70,6 +67,10 @@ namespace yl {
   struct error_info {
     string_representation const error_message;
     position const pos;
+
+    friend ::std::ostream& operator<<(::std::ostream& out, error_info const&) noexcept {
+      return out;
+    }
   };
 
   // definitions, other

@@ -9,7 +9,7 @@
 #include <yl/util.hpp>
 #include <yl/types.hpp>
 #include <yl/eval.hpp>
-#include <yl/macros.hpp>
+#include <yl/type_operations.hpp>
 
 namespace yl {
 
@@ -268,51 +268,84 @@ namespace yl {
     auto const& args = as_list(u->expr).children;
 
     ASSERT_ARG_COUNT(u, == 2);
-    return cast_q(args[2]).flat_map([&](auto other) {
-      other.children.insert(other.children.begin(), args[1]);
-      SUCCEED_WITH(u->pos, ::std::move(other));
-    });
+    return cast_q(args[2]).collect_flat(
+      [&](auto&&) {
+        return cast_hash_map(args[2]).collect_flat(
+          [&](auto&&) { 
+            FAIL_WITH(
+              concat(
+                "Expected Q expression or hash_map, got: ", 
+                type_of(args[2]->expr)), 
+              args[2]->pos); 
+          },
+          [&](auto&& map) {
+            return cast_q(args[1]).collect_flat(
+              fail_functor,
+              [&](auto&& q) -> result_type {
+                if (q.children.size() != 2) {
+                  FAIL_WITH("Expected a Q expression with two elements.", args[1]->pos);
+                }
+                SUCCEED_WITH(unit{
+                  u->pos,
+                  expression{map.insert({q.children[0], q.children[1]})}});
+              }
+            );
+          }
+        );
+      },
+      [&](auto other) {
+        other.children.insert(other.children.begin(), args[1]);
+        SUCCEED_WITH(u->pos, ::std::move(other));
+      }
+    );
   }
 
   inline result_type at_m(unit_ptr const& u, env_node_ptr& node) noexcept {
     auto const& args = as_list(u->expr).children;
-
     ASSERT_ARG_COUNT(u, == 2);
 
-    if (is_q(args[2])) {
-      NUMERIC_OR_ERROR(args[1]); 
-      auto const idx = static_cast<::std::size_t>(as_numeric(args[1]->expr));
-      auto& ls = as_list(args[2]->expr);
-      if (idx < 0 || idx >= ls.children.size()) {
-        FAIL_WITH(
-          concat("Index ", idx, " is out of bounds."), 
-          args[1]->pos);
-      }
-      return succeed(ls.children[idx]);
-    }
+    auto& seq = args[2];
+    auto& idx = args[1];
 
-    if (is_raw(args[2])) {
-      NUMERIC_OR_ERROR(args[1]); 
-      auto const idx = static_cast<::std::size_t>(as_numeric(args[1]->expr));
-      auto& str = as_string(args[2]->expr);
-      if (idx < 0 || idx >= str.str.size()) {
-        FAIL_WITH(
-          concat("Index ", idx, " is out of bounds."), 
-          args[1]->pos);
-      }
-      SUCCEED_WITH(u->pos, (string{make_string(str.str.substr(idx, 1)), true}));
-    }
+    auto const err = fail(error_info{
+      .error_message = concat(
+        "Expected Q expr, raw string or hash map, got: ", 
+        type_of(args[2]->expr)),
+      .pos = args[2]->pos
+    });
 
-    if (is_hash_map(args[2]->expr)) {
-      auto& m = as_hash_map(args[2]->expr);
-      // empty
-      if (!m.count(args[1])) {
-        SUCCEED_WITH(u->pos, (list{true, make_seq<unit_ptr>()}));  
-      }
-      return succeed(m.at(args[1]));
-    }
+    return cast_qr(seq).collect_flat(
+      [&](auto&&) {
+        return cast_hash_map(args[2]).collect_flat(
+          [err](auto&&) { return err; },
+          [&idx, pos = u->pos](auto&& map) -> result_type { 
+            if (!map.count(idx)) {
+              SUCCEED_WITH(pos, (list{true, make_seq<unit_ptr>()}));  
+            }
+            return succeed(map.at(idx)); 
+          }
+        );
+      },
 
-    FAIL_WITH("Expected a raw string, hash map or a Q expression.", args[2]->pos);
+      [&](auto&& ls_or_str) {
+        return cast_numeric(args[1]).flat_map(
+          [&](auto&& num_idx) -> result_type {
+            if (num_idx < 0 || static_cast<::std::size_t>(num_idx) >= len(seq)) {
+              FAIL_WITH(
+                concat(num_idx, " is out of bounds for size ", len(seq), "."), 
+                idx->pos);
+            }
+            return ls_or_str.collect_flat(
+              [num_idx](auto&& ls) { return succeed(ls.children[num_idx]); },
+              [&](auto&& str) { SUCCEED_WITH(
+                u->pos, 
+                (string{make_string(str.str.substr(num_idx, 1)), true})); 
+              }
+            );
+          }
+        );
+      }
+    );
   }
 
   inline result_type len_m(unit_ptr const& u, env_node_ptr& node) noexcept {
