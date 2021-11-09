@@ -257,7 +257,7 @@ namespace yl {
           return succeed();
         }
       }
-      return *this;
+      return static_cast<either<E, NewS>>(*this);
     }
 
     template<

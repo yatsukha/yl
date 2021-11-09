@@ -6,6 +6,11 @@
 
 namespace yl {
 
+#define BUILTIN_MACRO(name, desc, bind) \
+  { \
+    make_string(name), \
+    make_shared<unit>(unit{{0, 0}, function{make_string(desc), bind, true}})} 
+
 #define BUILTIN(name, desc, bind) \
   { \
     make_string(name), \
@@ -23,6 +28,7 @@ namespace yl {
       BUILTIN("^", "Binary xor.", xor_m),
       BUILTIN("<<", "Shift left.", shl_m),
       BUILTIN(">>", "Shift right.", shr_m),
+      BUILTIN_MACRO("'", "Creates a Q expression?", quote_m),
       BUILTIN("eval", "Evaluates a Q expression.", eval_m),
       BUILTIN("list", "Takes arguments and turns them into a Q expression.", list_m),
       BUILTIN("head", "Returns the first element of a list or a string.", head_m),
@@ -110,6 +116,54 @@ namespace yl {
         "Creates a map from pairs, example input: {\"1\" 1 \"2\" 2}.",
         mk_map_m
       ),
+      BUILTIN(
+        "is_atom",
+        "Check whether the expression inside the Q expression is an atom.\n"
+        "is_atom {aa} => 1\n"
+        "is_atom {}   => 0\n"
+        "is_atom {{}} => 0\n"
+        "is_atom {()} => 1",
+        is_atom_m
+      ),
+      BUILTIN(
+        "collapse",
+        "Collapses an nested list inside Q expression.\n"
+        "Also useful for dealing with non Q lists inside Q expressions.\n"
+        "collapse {{}} => {}\n"
+        "collapse {()} => {}\n"
+        "collapse {(doesn't need to be empty)} => {doesn't need to be empty}",
+        collapse_m
+      ),
+      BUILTIN(
+        "is_list",
+        "Checks whether the expression yields the specified type.",
+        is_list_m
+      ),
+      BUILTIN(
+        "is_numeric",
+        "Checks whether the expression yields the specified type.",
+        is_numeric_m
+      ),
+      BUILTIN(
+        "is_hash_map",
+        "Checks whether the expression yields the specified type.",
+        is_hash_map_m
+      ),
+      BUILTIN(
+        "is_function",
+        "Checks whether the expression yields the specified type.",
+        is_function_m
+      ),
+      BUILTIN(
+        "is_q",
+        "Checks whether the expression yields the specified type.",
+        is_q_m
+      ),
+      BUILTIN(
+        "is_raw",
+        "Checks whether the expression yields the specified type.",
+        is_raw_m
+      ),
     }, 1000
 #ifndef __EMSCRIPTEN__
     , &mem_pool
@@ -169,12 +223,10 @@ namespace yl {
       if (ls.children.empty() || (!force_eval && ls.q)) {
         return succeed(pu);
       }
-      
-      for (auto& child : ls.children) {
-        auto new_child = eval(child, node);
-        RETURN_IF_ERROR(new_child);
-        child = new_child.value();
-      }
+
+      auto const front = eval(ls.children[0], node);
+      RETURN_IF_ERROR(front);
+      ls.children[0] = front.value();
 
       auto const is_fn = is_function(ls.children.front()->expr);
 
@@ -190,6 +242,17 @@ namespace yl {
       }
 
       auto const& fn = as_function(ls.children.front()->expr);
+
+      if (!fn.macro) {
+        ::std::cout << fn.description << " >> is not a macro? " << "\n";
+        for (::std::size_t i = 1; i < ls.children.size(); ++i) {
+          auto& child = ls.children[i];
+          auto new_child = eval(child, node);
+          RETURN_IF_ERROR(new_child);
+          child = new_child.value();
+        }
+      }
+
       return fn.func(make_shared<unit>(pu->pos, ls), node);
     }
 

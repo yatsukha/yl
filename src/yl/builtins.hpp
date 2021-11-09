@@ -91,6 +91,11 @@ namespace yl {
   ARITHMETIC_OPERATOR(shl, <<);
   ARITHMETIC_OPERATOR(shr, >>);
 
+  inline result_type quote_m(unit_ptr const& u, env_node_ptr&) noexcept {
+    ASSERT_ARG_COUNT(u, == 1);
+    return succeed(as_list(u->expr).children[1]);
+  }
+
   inline result_type eval_m(unit_ptr const& u, env_node_ptr& node) noexcept {
     auto const& args = as_list(u->expr).children;
 
@@ -984,5 +989,55 @@ namespace yl {
 
     SUCCEED_WITH(unit{u->pos, expression{ret}});
   }
+
+  inline result_type is_atom_m(unit_ptr const& u, env_node_ptr&) noexcept {
+    ASSERT_ARG_COUNT(u, == 1);
+    return 
+      cast_q(as_list(u->expr).children[1])
+        .collect(
+          [](auto)   { return false; },
+          [](list l) { return l.children.size() == 1 && !is_list(l.children[0]->expr); }
+        )
+        .flat_map([&u](bool b) {
+          SUCCEED_WITH(unit{u->pos, expression{numeric{b}}})
+        });
+  }
+
+  inline result_type collapse_m(unit_ptr const& u, env_node_ptr&) noexcept {
+    ASSERT_ARG_COUNT(u, == 1);
+   
+    return 
+      cast_q(as_list(u->expr).children[1])
+        .flat_map([&u](list l) -> error_either<list> {
+          if (l.children.size() != 1) {
+            FAIL_WITH("Expect Q expression of length 1.", u->pos);
+          }
+          return cast_list(l.children[0]);
+        })
+        .flat_map([&u](list l) {
+          l.q = true;
+          SUCCEED_WITH(unit{u->pos, expression{l}});
+        });
+  }
+
+  #define TYPE_CHECK_M(type) \
+  inline result_type is_##type##_m(unit_ptr const& u, env_node_ptr&) noexcept { \
+    ASSERT_ARG_COUNT(u, == 1); \
+    SUCCEED_WITH(unit{u->pos, expression{numeric{is_##type(as_list(u->expr).children[1]->expr)}}}); \
+  }   
+
+  TYPE_CHECK_M(numeric);
+  TYPE_CHECK_M(list);
+  TYPE_CHECK_M(hash_map);
+  TYPE_CHECK_M(function);
+
+  #define TYPE_CHECK_SPECIFIC(type) \
+  inline result_type is_##type##_m(unit_ptr const& u, env_node_ptr&) noexcept { \
+    ASSERT_ARG_COUNT(u, == 1); \
+    SUCCEED_WITH(unit{u->pos, expression{numeric{is_##type(as_list(u->expr).children[1])}}}); \
+  }   
+
+  TYPE_CHECK_SPECIFIC(q);
+  TYPE_CHECK_SPECIFIC(raw);
 
 }

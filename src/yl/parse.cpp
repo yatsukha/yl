@@ -174,7 +174,7 @@ namespace yl {
         RETURN_IF_ERROR(res);
         ls.children.emplace_back(res.value());
       } else {
-        bool const q = line[curr] == '{';
+        auto const q = line[curr] == '{';
 
         auto res = parse_expression(line, line_num, ++curr, q ? '}' : ')');
         RETURN_IF_ERROR(res);

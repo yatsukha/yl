@@ -89,6 +89,8 @@ namespace yl {
     using type = ::std::function<result_type(unit_ptr const&, env_node_ptr&)>;
     string_representation description = make_string();
     type func;
+
+    bool macro = false;
   };
 
   struct unit {
