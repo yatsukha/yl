@@ -34,7 +34,7 @@
     DEF_TYPE_CHECK(hash_map);
 
   #define SUCCEED_WITH(pos, expr) \
-    return succeed(make_shared<unit>(pos, expr));
+    return succeed(::yl::make_shared<unit>(pos, expr));
 
   #define FAIL_WITH(msg, pos) \
     return fail(error_info{ \
@@ -96,22 +96,6 @@
 
     inline auto constexpr fail_functor = fail_functor_t{};
 
-    inline error_either<list> cast_q(unit_ptr const& u) noexcept {
-      auto err = fail(error_info{
-        concat("Expected Q expression, got ", type_of(u->expr), ", with value ", u->expr, "."),
-        u->pos
-      });
-      return cast_list(u).collect_flat(
-        [err](auto&&) { return err; },
-        [err](auto&& ls) -> error_either<list> {
-          if (ls.q) {
-            return succeed(ls);
-          }
-          return err;
-        }
-      );
-    }
-
     inline error_either<string> cast_r(unit_ptr const& u) noexcept {
       auto err = fail(error_info{
         concat("Expected raw string, got ", type_of(u->expr), ", with value ", u->expr, "."),
@@ -140,7 +124,7 @@
 
       using inner_t = either<list, string>;
     
-      return cast_q(u).collect_flat(
+      return cast_list(u).collect_flat(
         [err, u](auto&&) {
           return cast_r(u).collect_flat(
             [err](auto&&) { return err; },
@@ -155,7 +139,7 @@
 
     inline auto len(unit_ptr const& u) noexcept {
       return cast_qr(u).or_die().collect(
-        [](auto&& ls) { return ls.children.size(); },
+        [](auto&& ls) { return ls.size(); },
         [](auto&& str) { return str.str.size(); }
       ).or_die();
     }

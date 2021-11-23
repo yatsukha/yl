@@ -14,12 +14,8 @@
 namespace yl {
 
 #define ASSERT_ARG_COUNT(u, eq) \
-  if (!(as_list(u->expr).children.size() - 1 eq)) { \
+  if (!(as_list(u->expr).size() - 1 eq)) { \
     FAIL_WITH("Argument count must be " #eq ".", u->pos) \
-  }
-
-  inline bool is_q(unit_ptr const& u) noexcept {
-    return is_list(u->expr) && as_list(u->expr).q;
   }
 
   inline bool is_raw(unit_ptr const& u) noexcept {
@@ -37,15 +33,7 @@ namespace yl {
 #define LIST_OR_ERROR(unit_ptr) \
   if (!is_list(unit_ptr->expr)) {\
     return fail(error_info{ \
-      concat("Expected a Q expression got ", type_of(unit_ptr->expr), "."), \
-       unit_ptr->pos \
-    });  \
-  }
-
-#define Q_OR_ERROR(unit_ptr) \
-  if (!is_q(unit_ptr)) {\
-    return fail(error_info{ \
-      concat("Expected a Q expression got ", type_of(unit_ptr->expr), "."), \
+      concat("Expected a Q expression got ", type_of(unit_ptr->expr), ": ", unit_ptr->expr), \
        unit_ptr->pos \
     });  \
   }
@@ -73,7 +61,7 @@ namespace yl {
 
 #define ARITHMETIC_OPERATOR(name, operation) \
   inline result_type name##_m(unit_ptr const& u, env_node_ptr&) noexcept { \
-    auto const& args = as_list(u->expr).children; \
+    auto const& args = as_list(u->expr); \
     ASSERT_ARG_COUNT(u, >= 1); \
     auto first = cast_numeric(args[1]); \
     RETURN_IF_ERROR(first); \
@@ -101,48 +89,50 @@ namespace yl {
 
   inline result_type quote_m(unit_ptr const& u, env_node_ptr&) noexcept {
     ASSERT_ARG_COUNT(u, == 1);
-    return succeed(as_list(u->expr).children[1]);
+    return succeed(as_list(u->expr)[1]);
   }
 
   inline result_type eval_m(unit_ptr const& u, env_node_ptr& node) noexcept {
-    auto const& args = as_list(u->expr).children;
+    auto const& args = as_list(u->expr);
 
     ASSERT_ARG_COUNT(u, == 1);
-    return eval(args[1], node, true);
+    return eval(args[1], node);
   }
 
   inline result_type list_m(unit_ptr const& u, env_node_ptr& node) noexcept {
-    auto const& args = as_list(u->expr).children;
+    auto const& args = as_list(u->expr);
     ASSERT_ARG_COUNT(u, >= 1);
-    SUCCEED_WITH(u->pos, (list{true, make_seq<unit_ptr>(args.begin() + 1, args.end())}));
+    SUCCEED_WITH(u->pos, (make_seq<unit_ptr>(args.begin() + 1, args.end())));
+  }
+
+  inline result_type echo_m(unit_ptr const& u, env_node_ptr& node) noexcept {
+    ASSERT_ARG_COUNT(u, == 1);
+    ::std::cout << as_list(u->expr)[1]->expr << "\n";
+    return succeed(u);
   }
 
 #define SINGLE_LIST_BUILTIN(name, q_expr, r_string) \
   inline result_type name##_m(unit_ptr const& u, env_node_ptr& node) noexcept { \
-    auto const& args = as_list(u->expr).children; \
+    auto const& args = as_list(u->expr); \
     ASSERT_ARG_COUNT(u, == 1); \
-    bool q; \
-    if (!(q = is_q(args[1])) && !is_raw(args[1])) { \
-      FAIL_WITH("Expected a Q expression or a raw string as an argument.", \
+    bool is_ls = is_list(args[1]->expr); \
+    if (!is_ls && !is_raw(args[1])) { \
+      FAIL_WITH("Expected a list or a raw string as an argument.", \
                 args[1]->pos); \
     } \
-    return q ? q_expr(args[1]) : r_string(args[1]); \
+    return is_ls ? q_expr(args[1]) : r_string(args[1]); \
   }
 
   SINGLE_LIST_BUILTIN(
     head,
     [](auto const& u) { 
       auto const& ls = as_list(u->expr);
-      auto const empty = ls.children.empty();
+      auto const empty = ls.empty();
       SUCCEED_WITH(
-        empty ? u->pos : ls.children.front()->pos,
-        (list{
-          true, 
+        empty ? u->pos : ls.front()->pos,
           empty 
-            ? make_seq<unit_ptr>()
-            : make_seq<unit_ptr>(
-              ls.children.begin(), ls.children.begin() + 1)
-        })
+            ? expression{make_list()}
+            : ls[0]->expr
       );
     },
     [](auto const& u) {
@@ -163,15 +153,14 @@ namespace yl {
     tail,
     [](auto const& u) {
       auto const& ls = as_list(u->expr);
-      SUCCEED_WITH(u->pos, (list{
-        true,
+      SUCCEED_WITH(u->pos,
         make_seq<unit_ptr>(
-          ls.children.begin() + 1, 
-          ls.children.empty() 
-            ? ls.children.begin() + 1
-            : ls.children.end()
+          ls.begin() + 1, 
+          ls.empty() 
+            ? ls.begin() + 1
+            : ls.end()
         )
-      }));
+      );
     },
     [](auto const& u) {
       auto const& str = as_string(u->expr).str;
@@ -192,14 +181,10 @@ namespace yl {
     last,
     [](auto const& u) {
       auto const& ls = as_list(u->expr);
-      auto const empty = ls.children.empty();
-      SUCCEED_WITH(empty ? u->pos : ls.children.back()->pos, (list{
-        true,
-        make_seq<unit_ptr>(
-          ls.children.end() - !empty, 
-          ls.children.end()
-        )
-      }));
+      auto const empty = ls.empty();
+      SUCCEED_WITH(empty ? u->pos : ls.back()->pos,
+        empty ? expression{make_list()} : ls.back()->expr
+      );
     },
     [](auto const& u) {
       auto const& str = as_string(u->expr).str;
@@ -222,13 +207,10 @@ namespace yl {
       auto const& ls = as_list(u->expr);
       SUCCEED_WITH(
         u->pos,
-        (list{
-          true, 
           make_seq<unit_ptr>(
-            ls.children.begin(), 
-            ls.children.empty() ? ls.children.begin() : ls.children.end() - 1
+            ls.begin(), 
+            ls.empty() ? ls.begin() : ls.end() - 1
           )
-        })
       );
     },
     [](auto const& u) {
@@ -246,23 +228,22 @@ namespace yl {
   );
 
   inline result_type join_m(unit_ptr const& u, env_node_ptr& node) noexcept {
-    auto const& args = as_list(u->expr).children;
+    auto const& args = as_list(u->expr);
     ASSERT_ARG_COUNT(u, >= 1);
 
-    bool q;
+    bool is_ls;
 
-    if (!(q = is_q(args[1])) && !is_raw(args[1])) {
-      FAIL_WITH("Join expects a Q expression or a raw string as an argument.", 
+    if (!(is_ls = is_list(args[1]->expr)) && !is_raw(args[1])) {
+      FAIL_WITH("Join expects a list expression or a raw string as an argument.", 
                 args[1]->pos);
     }
 
-    if (q) {
-      auto ret = list{true};
+    if (is_ls) {
+      auto ret = make_list();
       for (::std::size_t i = 1; i < args.size(); ++i) {
-        Q_OR_ERROR(args[i]);
         auto const& other = as_list(args[i]->expr);
-        ret.children.insert(ret.children.end(), 
-                            other.children.begin(), other.children.end());
+        ret.insert(ret.end(), 
+                            other.begin(), other.end());
       }
       SUCCEED_WITH(u->pos, ::std::move(ret));
     }
@@ -278,43 +259,43 @@ namespace yl {
   }
 
   inline result_type cons_m(unit_ptr const& u, env_node_ptr& node) noexcept {
-    auto const& args = as_list(u->expr).children;
+    auto const& args = as_list(u->expr);
 
     ASSERT_ARG_COUNT(u, == 2);
-    return cast_q(args[2]).collect_flat(
+    return cast_list(args[2]).collect_flat(
       [&](auto&&) {
         return cast_hash_map(args[2]).collect_flat(
           [&](auto&&) { 
             FAIL_WITH(
               concat(
                 "Expected Q expression or hash_map, got: ", 
-                type_of(args[2]->expr)), 
+                type_of(args[2]->expr), " ", args[2]->expr), 
               args[2]->pos); 
           },
           [&](auto&& map) {
-            return cast_q(args[1]).collect_flat(
+            return cast_list(args[1]).collect_flat(
               fail_functor,
               [&](auto&& q) -> result_type {
-                if (q.children.size() != 2) {
+                if (q.size() != 2) {
                   FAIL_WITH("Expected a Q expression with two elements.", args[1]->pos);
                 }
                 SUCCEED_WITH(unit{
                   u->pos,
-                  expression{map.insert({q.children[0], q.children[1]})}});
+                  expression{map.insert({q[0], q[1]})}});
               }
             );
           }
         );
       },
       [&](auto other) {
-        other.children.insert(other.children.begin(), args[1]);
+        other.insert(other.begin(), args[1]);
         SUCCEED_WITH(u->pos, ::std::move(other));
       }
     );
   }
 
   inline result_type at_m(unit_ptr const& u, env_node_ptr& node) noexcept {
-    auto const& args = as_list(u->expr).children;
+    auto const& args = as_list(u->expr);
     ASSERT_ARG_COUNT(u, == 2);
 
     auto& seq = args[2];
@@ -333,7 +314,7 @@ namespace yl {
           [err](auto&&) { return err; },
           [&idx, pos = u->pos](auto&& map) -> result_type { 
             if (!map.count(idx)) {
-              SUCCEED_WITH(pos, (list{true, make_seq<unit_ptr>()}));  
+              SUCCEED_WITH(pos, make_list());  
             }
             return succeed(map.at(idx)); 
           }
@@ -349,7 +330,7 @@ namespace yl {
                 idx->pos);
             }
             return ls_or_str.collect_flat(
-              [num_idx](auto&& ls) { return succeed(ls.children[num_idx]); },
+              [num_idx](auto&& ls) { return succeed(ls[num_idx]); },
               [&](auto&& str) { SUCCEED_WITH(
                 u->pos, 
                 (string{make_string(str.str.substr(num_idx, 1)), true})); 
@@ -362,12 +343,12 @@ namespace yl {
   }
 
   inline result_type len_m(unit_ptr const& u, env_node_ptr& node) noexcept {
-    auto const& args = as_list(u->expr).children;
+    auto const& args = as_list(u->expr);
 
     ASSERT_ARG_COUNT(u, == 1);
 
-    if (is_q(args[1])) {
-      SUCCEED_WITH(u->pos, numeric(as_list(args[1]->expr).children.size()));
+    if (is_list(args[1]->expr)) {
+      SUCCEED_WITH(u->pos, numeric(as_list(args[1]->expr).size()));
     }
 
     if (is_raw(args[1])) {
@@ -382,20 +363,36 @@ namespace yl {
       "Expected a Q expression, hash map, or raw string.", 
       args[1]->pos);
   }
- 
-  inline result_type def_m(unit_ptr const& u, env_node_ptr& node) noexcept {
-    auto const& args = as_list(u->expr).children;
+
+  inline result_type assignment_m(unit_ptr const& u, env_node_ptr& node) noexcept {
+    auto const& args = as_list(u->expr);
   
     ASSERT_ARG_COUNT(u, >= 2);
-    Q_OR_ERROR(args[1]);
 
-    auto const& arguments = as_list(args[1]->expr).children;
+    bool is_ls = is_list(args[1]->expr);
+    auto ls = make_list();
+
+    if (!is_ls) {
+      if (is_raw(args[1])) {
+        FAIL_WITH("Expected a symbol.", args[1]->pos);
+      }
+      ls.push_back(args[1]);
+    }
+
+    auto const* arguments_ptr = &ls;
+    if (is_ls) {
+      arguments_ptr = &as_list(args[1]->expr);
+    }
+    auto const& arguments = *arguments_ptr;
 
     auto g_env = global_environment();
 
     if (arguments.size() != args.size() - 2) {
       FAIL_WITH(
-        "Differing length of arguments and corresponding assignments.",
+        concat(
+          "Differing length of arguments and corresponding assignments: ",
+          arguments.size(), args.size() - 2
+        ),
         u->pos
       );
     }
@@ -406,37 +403,20 @@ namespace yl {
         FAIL_WITH("Unexpected non-symbol in the argument list.", 
                   arguments[i]->pos);
       }
-      (*g_env->curr)[as_string(arguments[i]->expr).str] = args[2 + i];
+      auto new_value = eval(args[2 + i], node);
+      RETURN_IF_ERROR(new_value);
+      (*node->curr)[as_string(arguments[i]->expr).str] = new_value.value();
     }
 
-    SUCCEED_WITH(u->pos, (list{}));
+    SUCCEED_WITH(u->pos, (make_list()));
+  }
+ 
+  inline result_type def_m(unit_ptr const& u, env_node_ptr& node) noexcept {
+    auto ptr = global_environment();
+    ptr->prev = node;
+    return assignment_m(u, ptr);
   }
 
-  inline result_type assignment_m(unit_ptr const& u, env_node_ptr& node) noexcept {
-    auto const& args = as_list(u->expr).children;
-  
-    ASSERT_ARG_COUNT(u, >= 2);
-    Q_OR_ERROR(args[1]);
-
-    auto const& arguments = as_list(args[1]->expr).children;
-
-    if (arguments.size() != args.size() - 2) {
-      FAIL_WITH(
-        "Differing length of arguments and corresponding assignments.",
-        u->pos
-      );
-    }
-
-    for (::std::size_t i = 0; i < arguments.size(); ++i) {
-      if (!is_string(arguments[i]->expr)
-          || as_string(arguments[i]->expr).raw) {
-        FAIL_WITH("Unexpected non-symbol in the argument list.", arguments[i]->pos);
-      }
-      (*node->curr)[as_string(arguments[i]->expr).str] = args[2 + i];
-    }
-
-    SUCCEED_WITH(u->pos, (list{}));
-  }
 
   namespace detail {
 
@@ -445,14 +425,14 @@ namespace yl {
                                       env_node_ptr& node) noexcept {
       if (is_string(sym->expr) && !as_string(sym->expr).raw) {
         (*node->curr)[as_string(sym->expr).str] = expr;
-      } else if (is_q(sym)) {
-        Q_OR_ERROR(expr);
+      } else if (is_list(sym->expr)) {
+        LIST_OR_ERROR(expr);
 
-        auto const& syms = as_list(sym->expr).children;
-        auto const& sube = as_list(expr->expr).children;
+        auto const& syms = as_list(sym->expr);
+        auto const& sube = as_list(expr->expr);
 
         if (syms.size() != sube.size()) {
-          FAIL_WITH("Q expressions must be of equal length.", sym->pos);
+          FAIL_WITH("Expressions must be of equal length.", sym->pos);
         }
 
         for (::std::size_t i = 0; i < syms.size(); ++i) {
@@ -462,17 +442,20 @@ namespace yl {
         FAIL_WITH("Expected either a symbol or a sub-Q expression.", sym->pos);
       }
 
-      SUCCEED_WITH(sym->pos, (list{}));
+      SUCCEED_WITH(sym->pos, (make_list()));
     }
 
   }
 
   inline result_type decompose_m(unit_ptr const& u, env_node_ptr& node) noexcept {
-    auto const& args = as_list(u->expr).children;
+    auto const& args = as_list(u->expr);
     ASSERT_ARG_COUNT(u, == 2);
+
+    auto const evald = eval(args[2], node);
+    RETURN_IF_ERROR(evald);
     
-    RETURN_IF_ERROR(detail::decompose_impl(args[1], args[2], node));
-    SUCCEED_WITH(u->pos, (list{}));
+    RETURN_IF_ERROR(detail::decompose_impl(args[1], evald.value(), node));
+    SUCCEED_WITH(u->pos, (make_list()));
   } 
 
   inline function::type create_function(
@@ -482,12 +465,12 @@ namespace yl {
     env_ptr self_env = {}
   ) noexcept {
     return [=](unit_ptr const& u, env_node_ptr&) mutable -> result_type {
-      auto const& arguments = as_list(u->expr).children;
-      if (!variadic && arglist.children.size() < arguments.size() - 1) {
+      auto const& arguments = as_list(u->expr);
+      if (!variadic && arglist.size() < arguments.size() - 1) {
         FAIL_WITH(
           concat(
             "Excess arguments, expected ",
-            arglist.children.size(),
+            arglist.size(),
             ", got ",
             arguments.size() - 1,
             "."
@@ -496,12 +479,12 @@ namespace yl {
         );
       }
 
-      bool partial = !variadic && arglist.children.size() > arguments.size() - 1;
+      bool partial = !variadic && arglist.size() > arguments.size() - 1;
 
       // TODO: does it work without this?
       // also evaluate the line above
       if (variadic 
-          && arglist.children.size() > arguments.size() + !unused - 1) {
+          && arglist.size() > arguments.size() + !unused) {
         FAIL_WITH(
           "Not enough values to assign to non-variadic parameters.",
           u->pos
@@ -511,26 +494,28 @@ namespace yl {
       self_env = self_env ?: make_shared<environment>();
 
       for (::std::size_t i = 0; 
-           i != (arglist.children.size() ? arguments.size() - 1 : 0); ++i) {
-        auto sym = as_string(arglist.children[i]->expr);
+           i != (arglist.size() ? arguments.size() - 1 : 0); ++i) {
+        auto sym = as_string(arglist[i]->expr);
         if (sym.str[0] == '&') {
           if (unused) {
             break;
           }
         
-          (*self_env)[as_string(arglist.children[i + 1]->expr).str] = 
-            make_shared<unit>(
+          (*self_env)[as_string(arglist[i + 1]->expr).str] = 
+            ::yl::make_shared<unit>(
               arguments[i + 1]->pos,
-              list{
-                true, 
-                make_seq<unit_ptr>(arguments.begin() + i + 1, arguments.end())
-              }
+              make_seq<unit_ptr>(arguments.begin() + i + 1, arguments.end())
             );
           break;
         }
 
-        (*self_env)[as_string(arglist.children[i]->expr).str] = 
-          arguments[i + 1];
+        (*self_env)[as_string(arglist[i]->expr).str] = 
+          arguments[i + 1]; // fix eval with respect to macros
+      }
+
+      if (arguments.size() - 1 < arglist.size() - variadic && !unused) {
+        (*self_env)[as_string(arglist.back()->expr).str] =
+          ::yl::make_shared<unit>(u->pos, make_list());
       }
 
       if (partial) {
@@ -539,13 +524,10 @@ namespace yl {
           .func = [=](unit_ptr const& nested_u, env_node_ptr& nested_env) -> result_type {
             return create_function(
               false, false, 
-              {
-                .q = true,
-                .children = {
-                  arglist.children.begin() + arguments.size() - 1,
-                  arglist.children.end()
-                }
-              },
+              make_seq<unit_ptr>(
+                arglist.begin() + arguments.size() - 1,
+                arglist.end()
+              ),
               body,
               closure,
               self_env
@@ -559,14 +541,13 @@ namespace yl {
         make_shared<env_node>(env_node{
           .curr = self_env,
           .prev = closure
-        }), 
-        true
+        }) 
       );
     };
   }
 
   inline result_type lambda_m(unit_ptr const& u, env_node_ptr& node) noexcept {
-    auto const& args = as_list(u->expr).children;
+    auto const& args = as_list(u->expr);
 
     ASSERT_ARG_COUNT(u, >= 2);
     ASSERT_ARG_COUNT(u, <= 3);
@@ -587,29 +568,29 @@ namespace yl {
 
     auto const& arglist = as_list(args[1]->expr);
 
-    bool variadic = arglist.children.size() == 0;
+    bool variadic = arglist.size() == 0;
     bool unused   = variadic;
 
-    for (::std::size_t i = 0; i < arglist.children.size(); ++i) {
-      if (!is_string(arglist.children[i]->expr) 
-          || as_string(arglist.children[i]->expr).raw) {
-        FAIL_WITH("Expected a symbol.", arglist.children[i]->pos);   
+    for (::std::size_t i = 0; i < arglist.size(); ++i) {
+      if (!is_string(arglist[i]->expr) 
+          || as_string(arglist[i]->expr).raw) {
+        FAIL_WITH("Expected a symbol.", arglist[i]->pos);   
       }
 
-      if (as_string(arglist.children[i]->expr).str[0] == '&') {
+      if (as_string(arglist[i]->expr).str[0] == '&') {
         if (variadic) {
           FAIL_WITH(
-            "Can not have more than one variadic sign.", arglist.children[i]->pos
+            "Can not have more than one variadic sign.", arglist[i]->pos
           );
         }
         variadic = true;
-        if (arglist.children.size() - i > 2) {
+        if (arglist.size() - i > 2) {
           FAIL_WITH(
             "Variadic sign expects either zero or one argument.",
-            arglist.children[i]->pos
+            arglist[i]->pos
           );
         }
-        unused = i == arglist.children.size() - 1;
+        unused = i == arglist.size() - 1;
       }
     }
 
@@ -632,7 +613,7 @@ namespace yl {
   }
 
   inline result_type help_m(unit_ptr const& u, env_node_ptr& env) noexcept {
-    auto const& args = as_list(u->expr).children;
+    auto const& args = as_list(u->expr);
     
     ASSERT_ARG_COUNT(u, <= 1);
 
@@ -699,7 +680,7 @@ namespace yl {
    */
 
   inline result_type equal_m(unit_ptr const& u, env_node_ptr& env) noexcept {
-    auto const& args = as_list(u->expr).children;
+    auto const& args = as_list(u->expr);
     ASSERT_ARG_COUNT(u, == 2);
     SUCCEED_WITH(u->pos, args[1] == args[2]);
   }
@@ -712,7 +693,7 @@ namespace yl {
 
 #define SIMPLE_ORDERING(name, op) \
   inline result_type name##_m(unit_ptr const& u, env_node_ptr& env) noexcept { \
-    auto const& args = as_list(u->expr).children; \
+    auto const& args = as_list(u->expr); \
     ASSERT_ARG_COUNT(u, == 2); \
     if (args[1]->expr.index() != args[2]->expr.index()) { \
       FAIL_WITH("Expected two arguments of same type.", args[1]->pos);  \
@@ -735,24 +716,28 @@ namespace yl {
   SIMPLE_ORDERING(greater_or_equal, >=);
 
   inline result_type if_m(unit_ptr const& u, env_node_ptr& env) noexcept {
-    auto const& args = as_list(u->expr).children;
+    auto const& args = as_list(u->expr);
 
     ASSERT_ARG_COUNT(u, >= 2);
     ASSERT_ARG_COUNT(u, <= 3);
 
     bool has_else = args.size() == 4;
+    
+    auto const condition = eval(args[1], env);
+    RETURN_IF_ERROR(condition);
+    auto const& inner = condition.value();
 
-    if (!is_numeric(args[1]->expr)) {
-      FAIL_WITH("Expected a numeric value.", u->pos);
+    if (!is_numeric(inner->expr)) {
+      FAIL_WITH("Expected a numeric value.", args[1]->pos);
     }
 
-    if (!as_numeric(args[1]->expr)) {
+    if (!as_numeric(inner->expr)) {
       if (has_else) {
-        return eval(args[3], env, true);
+        return eval(args[3], env);
       }
-      SUCCEED_WITH(u->pos, list{.q = true});
+      SUCCEED_WITH(u->pos, make_list());
     } else {
-      return eval(args[2], env, true);
+      return eval(args[2], env);
     }
   }
 
@@ -816,18 +801,18 @@ namespace yl {
   }
 
   inline result_type sorted_m(unit_ptr const& u, env_node_ptr& env) noexcept {
-    auto const& args = as_list(u->expr).children;
+    auto const& args = as_list(u->expr);
     ASSERT_ARG_COUNT(u, >= 1);
     ASSERT_ARG_COUNT(u, <= 2);
 
-    Q_OR_ERROR(args[1]);
+    LIST_OR_ERROR(args[1]);
 
-    unit_ptr ret = make_shared<unit>(
+    unit_ptr ret = ::yl::make_shared<unit>(
       u->pos, 
       as_list(args[1]->expr)
     );
 
-    auto& children = as_list(ret->expr).children;
+    auto& children = as_list(ret->expr);
 
     if (children.empty()) {
       return succeed(ret);
@@ -851,11 +836,9 @@ namespace yl {
         children.push_back(a);
         children.push_back(b);
 
-        return sort_fn(make_shared<unit>(
+        return sort_fn(::yl::make_shared<unit>(
           u->pos, 
-          list{
-            .q = false,
-            .children = ::std::move(children)}
+          ::std::move(children)
         ), env);
       }
     );
@@ -865,7 +848,7 @@ namespace yl {
   }
 
   inline result_type stoi_m(unit_ptr const& u, env_node_ptr& env) noexcept {
-    auto const& args = as_list(u->expr).children;
+    auto const& args = as_list(u->expr);
     ASSERT_ARG_COUNT(u, == 1);
     RAW_OR_ERROR(args[1]);
 
@@ -901,7 +884,7 @@ namespace yl {
   }
 
   inline result_type str_m(unit_ptr const& u, env_node_ptr& env) noexcept {
-    auto const& args = as_list(u->expr).children;
+    auto const& args = as_list(u->expr);
     ASSERT_ARG_COUNT(u, == 1);
     if (is_string(args[1]->expr)) {
       return succeed(args[1]);
@@ -910,7 +893,7 @@ namespace yl {
   }
 
   inline result_type readlines_m(unit_ptr const& u, env_node_ptr& env) noexcept {
-    auto const& args = as_list(u->expr).children;
+    auto const& args = as_list(u->expr);
     ASSERT_ARG_COUNT(u, == 1);
     RAW_OR_ERROR(args[1]);
 
@@ -920,23 +903,23 @@ namespace yl {
       FAIL_WITH("Unable to open given file.", args[1]->pos);
     }
 
-    list lines{.q = true};
+    list lines = make_list();
 
     auto line = make_string();
     while (::std::getline(in, line)) {
-      lines.children.push_back(
+      lines.push_back(
         make_shared<unit>(args[1]->pos, string{::std::move(line), true}));  
     }
 
-    if (lines.children.size() && as_string(lines.children.back()->expr).str.empty()) {
-      lines.children.pop_back();
+    if (lines.size() && as_string(lines.back()->expr).str.empty()) {
+      lines.pop_back();
     }
 
     SUCCEED_WITH(args[1]->pos, ::std::move(lines));
   }
 
   inline result_type split_m(unit_ptr const& u, env_node_ptr& env) noexcept {
-    auto const& args = as_list(u->expr).children;
+    auto const& args = as_list(u->expr);
     ASSERT_ARG_COUNT(u, == 2);
     RAW_OR_ERROR(args[1]);
     RAW_OR_ERROR(args[2]);
@@ -944,7 +927,7 @@ namespace yl {
     auto const& input = as_string(args[2]->expr).str;
     auto const& delim = as_string(args[1]->expr).str;
 
-    list ret{.q = true};
+    list ret = make_list();
     ::std::size_t last_split = 0ul;
     ::std::size_t curr;
 
@@ -954,7 +937,7 @@ namespace yl {
         continue;
       }
 
-      ret.children.push_back(make_shared<unit>(
+      ret.push_back(make_shared<unit>(
         u->pos, 
         string{
           .str = input.substr(last_split, curr - last_split),
@@ -965,7 +948,7 @@ namespace yl {
     }
 
     if (last_split != input.length()) {
-      ret.children.push_back(make_shared<unit>(
+      ret.push_back(make_shared<unit>(
         u->pos, 
         string{
           .str = input.substr(last_split, input.length() - last_split),
@@ -978,18 +961,18 @@ namespace yl {
   }
 
   inline result_type err_m(unit_ptr const& u, env_node_ptr& env) noexcept {
-    auto const& args = as_list(u->expr).children;
+    auto const& args = as_list(u->expr);
     ASSERT_ARG_COUNT(u, == 1);
     FAIL_WITH(as_string(str_m(u, env).value()->expr).str, args[1]->pos);
   }
 
   inline result_type mk_map_m(unit_ptr const& u, env_node_ptr& env) noexcept {
-    auto const& args = as_list(u->expr).children;
+    auto const& args = as_list(u->expr);
     ASSERT_ARG_COUNT(u, == 1);
-    Q_OR_ERROR(args[1]);
+    LIST_OR_ERROR(args[1]);
 
     auto const& mappings = as_list(args[1]->expr);
-    if (mappings.children.size() % 2) {
+    if (mappings.size() % 2) {
       FAIL_WITH(
         "Map requires key value pairings, ie. an even number of elements.", 
         args[1]->pos);
@@ -997,48 +980,50 @@ namespace yl {
 
     hash_map ret;
 
-    for (::std::size_t i = 0; i < mappings.children.size(); i += 2) {
+    for (::std::size_t i = 0; i < mappings.size(); i += 2) {
       // no transient..
-      ret = ret.insert({mappings.children[i], mappings.children[i + 1]});
+      ret = ret.insert({mappings[i], mappings[i + 1]});
     }
 
     SUCCEED_WITH(unit{u->pos, expression{ret}});
   }
 
-  inline result_type is_atom_m(unit_ptr const& u, env_node_ptr&) noexcept {
-    ASSERT_ARG_COUNT(u, == 1);
-    return 
-      cast_q(as_list(u->expr).children[1])
-        .collect(
-          [](auto)   { return false; },
-          [](list l) { return l.children.size() == 1 && !is_list(l.children[0]->expr); }
-        )
-        .flat_map([&u](bool b) {
-          SUCCEED_WITH(unit{u->pos, expression{numeric{b}}})
-        });
+  inline result_type while_m(unit_ptr const& u, env_node_ptr& env) noexcept {
+    ASSERT_ARG_COUNT(u, == 2);
+    auto const& args = as_list(u->expr);
+
+    for (;;) {
+      auto const condition_either = eval(args[1], env);
+      RETURN_IF_ERROR(condition_either);
+      NUMERIC_OR_ERROR(condition_either.value()); 
+      auto const condition = as_numeric(condition_either.value()->expr);
+
+      if (!condition) {
+        break;
+      }
+
+      eval(args[2], env);
+    }    
+
+    SUCCEED_WITH(u->pos, make_list());
   }
 
-  inline result_type collapse_m(unit_ptr const& u, env_node_ptr&) noexcept {
+  inline result_type keyword_m(unit_ptr const& u, env_node_ptr&) noexcept {
+    FAIL_WITH(
+        "Keyword is not meant to be evaluated. "
+        "It is strictly used for parser/evaluator operations.", u->pos);
+  }
+
+  inline result_type is_atom_m(unit_ptr const& u, env_node_ptr&) noexcept {
     ASSERT_ARG_COUNT(u, == 1);
-   
-    return 
-      cast_q(as_list(u->expr).children[1])
-        .flat_map([&u](list l) -> error_either<list> {
-          if (l.children.size() != 1) {
-            FAIL_WITH("Expect Q expression of length 1.", u->pos);
-          }
-          return cast_list(l.children[0]);
-        })
-        .flat_map([&u](list l) {
-          l.q = true;
-          SUCCEED_WITH(unit{u->pos, expression{l}});
-        });
+    auto const& arg = as_list(u->expr)[1]->expr;
+    SUCCEED_WITH(u->pos, expression{numeric{is_numeric(arg) || is_string(arg)}});
   }
 
   #define TYPE_CHECK_M(type) \
   inline result_type is_##type##_m(unit_ptr const& u, env_node_ptr&) noexcept { \
     ASSERT_ARG_COUNT(u, == 1); \
-    SUCCEED_WITH(unit{u->pos, expression{numeric{is_##type(as_list(u->expr).children[1]->expr)}}}); \
+    SUCCEED_WITH(unit{u->pos, expression{numeric{is_##type(as_list(u->expr)[1]->expr)}}}); \
   }   
 
   TYPE_CHECK_M(numeric);
@@ -1049,10 +1034,9 @@ namespace yl {
   #define TYPE_CHECK_SPECIFIC(type) \
   inline result_type is_##type##_m(unit_ptr const& u, env_node_ptr&) noexcept { \
     ASSERT_ARG_COUNT(u, == 1); \
-    SUCCEED_WITH(unit{u->pos, expression{numeric{is_##type(as_list(u->expr).children[1])}}}); \
+    SUCCEED_WITH(unit{u->pos, expression{numeric{is_##type(as_list(u->expr)[1])}}}); \
   }   
 
-  TYPE_CHECK_SPECIFIC(q);
   TYPE_CHECK_SPECIFIC(raw);
 
 }

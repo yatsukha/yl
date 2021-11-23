@@ -18,6 +18,15 @@ namespace yl {
    
   env_node_ptr global_environment() noexcept {
     auto static g_env = make_shared(environment{{
+      BUILTIN(
+        ",",
+        "Forces evaluation of an argument to macro function.\n"
+        "(\\m (x) (x)) + => + (symbol)\n"
+        "(\\m (x) (q , x)) , + => <<+ function>>\n"
+        "NOTE: it is not recursive! "
+        "You can not evaluate an expression inside another unevaluated one.",
+        keyword_m
+      ),
       BUILTIN("+", "Adds numbers.", add_m),
       BUILTIN("-", "Subtracts numbers.", sub_m),
       BUILTIN("*", "Multiplies numbers.", mul_m),
@@ -32,6 +41,7 @@ namespace yl {
       BUILTIN_MACRO("quote", "Creates a Q expression?", quote_m),
       BUILTIN("e",    "Evaluates a Q expression.", eval_m),
       BUILTIN("eval", "Evaluates a Q expression.", eval_m),
+      BUILTIN("echo", "Echoes the value.", echo_m),
       BUILTIN("list", "Takes arguments and turns them into a Q expression.", list_m),
       BUILTIN("head", "Returns the first element of a list or a string.", head_m),
       BUILTIN("tail", "Returns the list/string without it's first element.", tail_m),
@@ -51,17 +61,17 @@ namespace yl {
         "Converts a raw string to an integer.",
         stoi_m
       ),
-      BUILTIN(
+      BUILTIN_MACRO(
         "def",
         "Defines a global variable. 'def {a b} 1 2' assigns 1 and 2 to a and b.",
         def_m
       ),
-      BUILTIN(
+      BUILTIN_MACRO(
         "=",
         "Assignes to a local variable. '= {a b} 1 2' assigns 1 and 2 to a and b.",
         assignment_m
       ),
-      BUILTIN(
+      BUILTIN_MACRO(
         "decomp",
         "Decomposes a Q expression into local variables.",
         decompose_m
@@ -86,12 +96,13 @@ namespace yl {
       ),
       BUILTIN("help", "Outputs information about a symbol.", help_m),
       BUILTIN("==", "Compares arguments for equality.", equal_m),
+      BUILTIN_MACRO("is_equal", "Compares arguments for equality.", equal_m),
       BUILTIN("!=", "Compares arguments for inequality.", not_equal_m),
       BUILTIN("<", "Tests if first number is less than second.", less_than_m),
       BUILTIN(">", "Tests if first number is greater than second.", greater_than_m),
       BUILTIN("<=", "Tests if first number is less than or equal to second.", less_or_equal_m),
       BUILTIN(">=", "Tests if first number is greater than or equal to second.", greater_or_equal_m),
-      BUILTIN(
+      BUILTIN_MACRO(
         "if", 
         "Evaluates a Q expression depending on the condition.\n"
         "Example: 'if (== 1 2) { 1 } { 2 }' will yield 2.\n"
@@ -118,28 +129,20 @@ namespace yl {
         "Converts an expression to string.",
         str_m
       ),
-      BUILTIN(
+      BUILTIN_MACRO(
         "mk_map",
         "Creates a map from pairs, example input: {\"1\" 1 \"2\" 2}.",
         mk_map_m
       ),
       BUILTIN(
         "is_atom",
-        "Check whether the expression inside the Q expression is an atom.\n"
-        "is_atom {aa} => 1\n"
-        "is_atom {}   => 0\n"
-        "is_atom {{}} => 0\n"
-        "is_atom {()} => 1",
+        "Check whether the expression is an atom (not a collection).",
         is_atom_m
       ),
-      BUILTIN(
-        "collapse",
-        "Collapses an nested list inside Q expression.\n"
-        "Also useful for dealing with non Q lists inside Q expressions.\n"
-        "collapse {{}} => {}\n"
-        "collapse {()} => {}\n"
-        "collapse {(doesn't need to be empty)} => {doesn't need to be empty}",
-        collapse_m
+      BUILTIN_MACRO(
+        "__while",
+        "Used exclusively for library optimization. Do not use in regular code.",
+        while_m
       ),
       BUILTIN(
         "is_list",
@@ -160,11 +163,6 @@ namespace yl {
         "is_function",
         "Checks whether the expression yields the specified type.",
         is_function_m
-      ),
-      BUILTIN(
-        "is_q",
-        "Checks whether the expression yields the specified type.",
-        is_q_m
       ),
       BUILTIN(
         "is_raw",
@@ -202,9 +200,9 @@ namespace yl {
 
       auto next = iter->second;
 
-      if (!is_string(next->expr) || as_string(next->expr).raw) {
+//      if (!is_string(next->expr) || as_string(next->expr).raw) {
         return succeed(make_shared(unit{pu->pos, next->expr}));
-      }
+//      }
 
       s = as_string(next->expr).str;
       node = starting_point;
@@ -213,8 +211,7 @@ namespace yl {
 
   result_type eval(
     unit_ptr const& pu, 
-    env_node_ptr node, 
-    bool const force_eval
+    env_node_ptr node
   ) noexcept {
     if (is_string(pu->expr)) {
       if (as_string(pu->expr).raw) {
@@ -227,39 +224,72 @@ namespace yl {
     if (is_list(pu->expr)) {
       auto ls = as_list(pu->expr);
 
-      if (ls.children.empty() || (!force_eval && ls.q)) {
+      if (ls.empty()) {
         return succeed(pu);
       }
 
-      auto const front = eval(ls.children[0], node);
+      auto const front = eval(ls[0], node);
       RETURN_IF_ERROR(front);
-      ls.children[0] = front.value();
+      ls[0] = front.value();
 
-      auto const is_fn = is_function(ls.children.front()->expr);
+      auto const is_fn = is_function(ls.front()->expr);
 
-      if (ls.children.size() == 1 && !is_fn) {
-        return succeed(ls.children.front());
+      if (ls.size() == 1 && !is_fn) {
+        return succeed(ls.front());
       }
 
       if (!is_fn) {
         FAIL_WITH(
           "Expected a builtin or user defined function.",
-          ls.children.front()->pos
+          ls.front()->pos
         );
       }
 
-      auto const& fn = as_function(ls.children.front()->expr);
-
+      auto const& fn = as_function(ls.front()->expr);
+      
+      // insert special syntax for evaluating arguments when macro
       if (!fn.macro) {
-        for (::std::size_t i = 1; i < ls.children.size(); ++i) {
-          auto& child = ls.children[i];
+        for (::std::size_t i = 1; i < ls.size(); ++i) {
+          auto& child = ls[i];
           auto new_child = eval(child, node);
           RETURN_IF_ERROR(new_child);
           child = new_child.value();
         }
+      } else {
+        ::std::size_t shrink = 0;
+        auto move_forward = [&shrink, &ls](auto&& i) {
+          if (shrink) {
+            ls[i - shrink] = ls[i];
+          }
+        };
+
+        for (::std::size_t i = 1; i < ls.size(); ++i) {
+          auto& child = ls[i]->expr;
+          if (!is_string(child)) {
+            move_forward(i);
+            continue;
+          }
+          auto& sym = as_string(child);
+          if (sym.raw) {
+            move_forward(i);
+            continue;
+          }
+
+          if (sym.str == ",") {
+            auto const v = eval(ls[i + 1], node);
+            RETURN_IF_ERROR(v);
+            ls[i - shrink] = v.value();
+            ++shrink;
+            i += 1;
+          } else {
+            move_forward(i);
+          }
+        }
+
+        ls.resize(ls.size() - shrink);
       }
 
-      return fn.func(make_shared<unit>(pu->pos, ls), node);
+      return fn.func(::yl::make_shared<unit>(pu->pos, ls), node);
     }
 
     return succeed(pu);

@@ -31,11 +31,11 @@ namespace yl {
   }
 
   char left_paren(char const c) noexcept {
-    return (c == '(' || c == '{') ? c : 0;
+    return c == '(' ? c : 0;
   }
 
   char right_paren(char const c) noexcept {
-    return (c == ')' || c == '}') ? c : 0;
+    return c == ')' ? c : 0;
   }
 
   char paren(char const c) noexcept {
@@ -117,6 +117,10 @@ namespace yl {
     SUCCEED_WITH((position{line_num, start}), s);
   }
 
+  bool special_char(char const c) noexcept {
+    return c == ',';
+  }
+
   result_type parse_terminal(
       char const* line, ::std::size_t const line_num, prf curr) noexcept {
     if (line[curr] == '\"') {
@@ -125,7 +129,7 @@ namespace yl {
 
     pos const start = curr;
     
-    if (line[curr] != '\'') {
+    if (!special_char(line[curr])) {
       while (!is_eof(line, curr) && !::std::isblank(line[curr]) 
               && !paren(line[curr])) {
         ++curr;
@@ -170,22 +174,20 @@ namespace yl {
       FAIL_WITH("Expression expected.", (position{line_num, curr}));
     }
 
-    auto ls = list{};
+    auto ls = make_list();
     auto expr = unit{{line_num, curr}};
 
     while (!is_eof(line, curr) && !right_paren(line[curr])) {
       if (!left_paren(line[curr])) {
         auto res = parse_terminal(line, line_num, curr);
         RETURN_IF_ERROR(res);
-        ls.children.emplace_back(res.value());
+        ls.emplace_back(res.value());
       } else {
-        auto const q = line[curr] == '{';
-
-        auto res = parse_expression(line, line_num, ++curr, q ? '}' : ')');
+        ++curr;
+        auto res = parse_expression(line, line_num, curr, ')');
         RETURN_IF_ERROR(res);
 
-        as_list(res.value()->expr).q = q;
-        ls.children.emplace_back(res.value());
+        ls.emplace_back(res.value());
       }
 
       skip(line, curr);

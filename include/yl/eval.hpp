@@ -8,8 +8,7 @@ namespace yl {
 
   result_type eval(
     unit_ptr const& pu, 
-    env_node_ptr node = global_environment(), 
-    bool const force_eval = false
+    env_node_ptr node = global_environment()
   ) noexcept;
   
 }

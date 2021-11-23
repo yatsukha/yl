@@ -1,0 +1,9 @@
+(((\(recursive-fn)
+    ((\(f) (f f))
+     (\(f) (recursive-fn (\(x) ((f f) x))))))
+  (\(recurse)
+    (\(l)
+      (if (== l (quote ()))
+        0
+        (+ 1 (recurse (tail l)))))))
+ (quote (1 2 3 4)))

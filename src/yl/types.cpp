@@ -17,13 +17,13 @@ namespace yl {
       },
       [&out](function fn) { out << fn.description; },
       [&out](list ls) {
-        out << (ls.q ? "{" : "(");
-        for (::std::size_t i = 0; i < ls.children.size(); ++i) {
+        out << "(";
+        for (::std::size_t i = 0; i < ls.size(); ++i) {
           if (i)
             out << " ";
-          out << ls.children[i]->expr;
+          out << ls[i]->expr;
         }
-        out << (ls.q ? "}" : ")");
+        out << ")";
       },
       [&out](hash_map m) {
         out << "{";
@@ -75,8 +75,7 @@ namespace yl {
     if (is_list(a->expr)) {
       auto const& al = as_list(a->expr);
       auto const& bl = as_list(b->expr);
-
-      return al.q == bl.q && al.children == bl.children;
+      return al == bl;
     }
 
     if (is_hash_map(a->expr)) {
@@ -105,9 +104,9 @@ namespace yl {
       },
       [](list ls) {
         // TODO:
-        ::std::size_t ret = ::std::hash<bool>{}(ls.q);
+        ::std::size_t ret{};
         auto hasher = unit_hasher{};
-        for (auto&& child : ls.children) {
+        for (auto&& child : ls) {
           ret ^= hasher(child);
         }
         return ret;

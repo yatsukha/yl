@@ -30,7 +30,9 @@ namespace yl {
     bool raw = false;
   };
 
-  struct list;
+  using list = seq_representation<unit_ptr>;
+  inline auto make_list() noexcept { return make_seq<unit_ptr>(); }
+
   struct function;
   using numeric = ::std::int64_t;
   using hash_map = ::immer::map<unit_ptr, unit_ptr, unit_hasher>;
@@ -74,12 +76,6 @@ namespace yl {
   };
 
   // definitions, other
-
-  struct list {
-    bool q = false;
-    using children_type = seq_representation<unit_ptr>;
-    children_type children = make_seq<unit_ptr>();
-  };
 
   template<typename Result>
   using error_either = either<error_info, Result>;
