@@ -1,8 +1,8 @@
 ; PREDEF, do not touch
 
 (def unpack
-  (\ (f l) "unpack + (q (1 2 3)) <=> eval (cons (q +) (q (1 2 3)))"
-     (eval (cons f l))))
+  (\s (f l) "unpack + (1 2 3) <=> eval (cons (q +) (q (1 2 3)))"
+      (eval (cons (eval f) (eval l)))))
 
 (def fn
   (\m (& args) "fn add (x y) (+ x y) <=> def add (\ (x y) (+ x y))"
@@ -16,6 +16,74 @@
 (fn repeat (n expr) 
            (if n 
              (cons expr (repeat (- n 1) expr))))
+
+(def and
+  (\s (& conditions)
+      (if (len conditions)
+        (if (eval (head conditions))
+          (unpack and (tail conditions))
+          0)
+        1)))
+
+(def time-it
+  (\s (block) 
+      "Times the given block of code in milliseconds. Returns tuple of result and time."
+      (do
+        (= start (time-ms))
+        (= result (eval block))
+        (= end (time-ms))
+        (list result (- end start)))))
+
+(fn replace
+  (l original replacement) "Replaces all instances recursively."
+  (if (== l original)
+    replacement
+    (if (atom? l)
+      l
+      (if (len l)
+        (cons
+          (replace (head l) original replacement)
+          (replace (tail l) original replacement))))))
+
+(fn q-all
+  (l) "Quotes every element in the list, non-recursive."
+  (if (len l)
+    (cons
+      (list (q q) (head l))
+      (q-all (tail l)))))
+
+(fn tail-rec-helper
+  (recurse-aux body)
+  "Replaces the recursion of a tail recursive function with an early return."
+  (replace body recurse-aux
+    (list 
+      (q \) 
+      (q (& arglist))
+      (list 
+        (q cons) 
+        (list (q q) recurse-aux) 
+        (q arglist)))))
+
+(def tail-rec
+  (\m (recurse_aux args body)
+      (\
+        ,args
+        (do
+          (= inner_function 
+            (\ ,args ,(tail-rec-helper recurse_aux body)))
+          (= control (unpack inner_function args))
+          (__while 
+            (and (list? control) (== recurse_aux (head control)))
+            (= control 
+              (unpack inner_function (q-all (tail control)))))
+          (control)))))
+
+(def repeat
+  (tail-rec recurse
+    (n expr acc)
+    (if (== 0 n)
+      acc
+      (recurse (- n 1) expr (cons expr acc)))))
 ;;
 ;;fun {reversed l} "Reverses a given Q expression. 'eval (reversed {2 1 +})'" {
 ;;  if (< 2 (len l)) 

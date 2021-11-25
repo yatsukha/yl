@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -108,7 +109,7 @@ namespace yl {
   inline result_type echo_m(unit_ptr const& u, env_node_ptr& node) noexcept {
     ASSERT_ARG_COUNT(u, == 1);
     ::std::cout << as_list(u->expr)[1]->expr << "\n";
-    return succeed(u);
+    SUCCEED_WITH(u->pos, make_list());
   }
 
 #define SINGLE_LIST_BUILTIN(name, q_expr, r_string) \
@@ -456,15 +457,26 @@ namespace yl {
     
     RETURN_IF_ERROR(detail::decompose_impl(args[1], evald.value(), node));
     SUCCEED_WITH(u->pos, (make_list()));
-  } 
+  }
+
+  namespace detail {
+
+    enum class function_kind {
+      regular,
+      macro,
+      syntax
+    };
+
+  }
 
   inline function::type create_function(
     bool const variadic, bool const unused,
     list const& arglist, unit_ptr const& body,
     env_node_ptr closure,
+    detail::function_kind const fk,
     env_ptr self_env = {}
   ) noexcept {
-    return [=](unit_ptr const& u, env_node_ptr&) mutable -> result_type {
+    return [=](unit_ptr const& u, env_node_ptr& syntax_env) mutable -> result_type {
       auto const& arguments = as_list(u->expr);
       if (!variadic && arglist.size() < arguments.size() - 1) {
         FAIL_WITH(
@@ -491,6 +503,7 @@ namespace yl {
         );
       }
 
+      // 
       self_env = self_env ?: make_shared<environment>();
 
       for (::std::size_t i = 0; 
@@ -529,7 +542,8 @@ namespace yl {
                 arglist.end()
               ),
               body,
-              closure,
+              fk == detail::function_kind::syntax ? syntax_env : closure,
+              fk,
               self_env
             )(nested_u, nested_env);
           }})
@@ -540,13 +554,16 @@ namespace yl {
         body, 
         make_shared<env_node>(env_node{
           .curr = self_env,
-          .prev = closure
+          .prev = fk == detail::function_kind::syntax ? syntax_env : closure
         }) 
       );
     };
   }
 
-  inline result_type lambda_m(unit_ptr const& u, env_node_ptr& node) noexcept {
+  inline result_type create_function_facade(
+    unit_ptr const& u, env_node_ptr& node,
+    detail::function_kind const fk
+  ) noexcept {
     auto const& args = as_list(u->expr);
 
     ASSERT_ARG_COUNT(u, >= 2);
@@ -600,16 +617,22 @@ namespace yl {
       u->pos,
       (function{
         .description = ::std::move(doc_string),
-        .func = create_function(variadic, unused, arglist, body, node)
+        .func = create_function(variadic, unused, arglist, body, node, fk),
+        .macro = fk != detail::function_kind::regular
       })
     );
   }
 
+  inline result_type lambda_m(unit_ptr const& u, env_node_ptr& node) noexcept {
+    return create_function_facade(u, node, detail::function_kind::regular);
+  }
+
   inline result_type macro_m(unit_ptr const& u, env_node_ptr& env) noexcept {
-    return lambda_m(u, env).map([](unit_ptr u) { 
-      as_function(u->expr).macro = true;
-      return u;
-    });
+    return create_function_facade(u, env, detail::function_kind::macro);
+  }
+
+  inline result_type syntax_m(unit_ptr const& u, env_node_ptr& env) noexcept {
+    return create_function_facade(u, env, detail::function_kind::syntax);
   }
 
   inline result_type help_m(unit_ptr const& u, env_node_ptr& env) noexcept {
@@ -1038,5 +1061,15 @@ namespace yl {
   }   
 
   TYPE_CHECK_SPECIFIC(raw);
+
+  inline result_type time_ms_m(unit_ptr const& u, env_node_ptr&) noexcept {
+    auto const duration = 
+      ::std::chrono::high_resolution_clock::now().time_since_epoch();
+    auto const millis =
+      ::std::chrono::duration_cast<::std::chrono::milliseconds>(duration)
+        .count();
+
+    SUCCEED_WITH(u->pos, millis);
+  }
 
 }

@@ -94,9 +94,18 @@ namespace yl {
         "Macro function. Same as \\ but does not evaluate arguments.",
         macro_m
       ),
+      BUILTIN_MACRO(
+        "\\s", 
+        "Syntax macro. The same as regular macro \\m except for how closure is defined.\n"
+        "Symbols are captured from the place where the function is called, rather\n"
+        "than where the function is created. This distinction is important for\n"
+        "creating new syntax for example an 'or' function that can properly evaluate\n"
+        "it's arguments.",
+        syntax_m
+      ),
       BUILTIN("help", "Outputs information about a symbol.", help_m),
       BUILTIN("==", "Compares arguments for equality.", equal_m),
-      BUILTIN_MACRO("is_equal", "Compares arguments for equality.", equal_m),
+      BUILTIN_MACRO("is_equal", "Compares unevaluated arguments for equality.", equal_m),
       BUILTIN("!=", "Compares arguments for inequality.", not_equal_m),
       BUILTIN("<", "Tests if first number is less than second.", less_than_m),
       BUILTIN(">", "Tests if first number is greater than second.", greater_than_m),
@@ -129,13 +138,13 @@ namespace yl {
         "Converts an expression to string.",
         str_m
       ),
-      BUILTIN_MACRO(
-        "mk_map",
-        "Creates a map from pairs, example input: {\"1\" 1 \"2\" 2}.",
+      BUILTIN(
+        "mk-map",
+        "Creates a map from pairs, example input: (q (\"1\" 1 \"2\" 2).",
         mk_map_m
       ),
       BUILTIN(
-        "is_atom",
+        "atom?",
         "Check whether the expression is an atom (not a collection).",
         is_atom_m
       ),
@@ -145,29 +154,34 @@ namespace yl {
         while_m
       ),
       BUILTIN(
-        "is_list",
+        "list?",
         "Checks whether the expression yields the specified type.",
         is_list_m
       ),
       BUILTIN(
-        "is_numeric",
+        "numeric?",
         "Checks whether the expression yields the specified type.",
         is_numeric_m
       ),
       BUILTIN(
-        "is_hash_map",
+        "map?",
         "Checks whether the expression yields the specified type.",
         is_hash_map_m
       ),
       BUILTIN(
-        "is_function",
+        "function?",
         "Checks whether the expression yields the specified type.",
         is_function_m
       ),
       BUILTIN(
-        "is_raw",
+        "raw?",
         "Checks whether the expression yields the specified type.",
         is_raw_m
+      ),
+      BUILTIN(
+        "time-ms",
+        "Retrieves the time since epoch in milliseconds.",
+        time_ms_m
       ),
     }, 1000
 #ifndef __EMSCRIPTEN__
@@ -186,27 +200,22 @@ namespace yl {
       FAIL_WITH("Expected a symbol.", pu->pos);
     }
 
+    //::std::cout << pu->expr << "\n";
+
     auto starting_point = node;
     auto s = as_string(pu->expr).str;
 
-    for (;;) {
-      auto iter = node->curr->begin();
-      while ((iter = node->curr->find(s)) == node->curr->end()) {
-        if (!node->prev) {
-          FAIL_WITH(concat("Symbol ", s, " is undefined."), pu->pos); 
-        }
-        node = node->prev;
+    auto iter = node->curr->begin();
+    while ((iter = node->curr->find(s)) == node->curr->end()) {
+      if (!node->prev) {
+        FAIL_WITH(concat("Symbol ", s, " is undefined."), pu->pos); 
       }
-
-      auto next = iter->second;
-
-//      if (!is_string(next->expr) || as_string(next->expr).raw) {
-        return succeed(make_shared(unit{pu->pos, next->expr}));
-//      }
-
-      s = as_string(next->expr).str;
-      node = starting_point;
+      node = node->prev;
     }
+
+    auto next = iter->second;
+
+    return succeed(make_shared(unit{pu->pos, next->expr}));
   }
 
   result_type eval(
@@ -240,14 +249,20 @@ namespace yl {
 
       if (!is_fn) {
         FAIL_WITH(
-          "Expected a builtin or user defined function.",
+          concat(
+            "Expected a builtin or user defined function, got ",
+            type_of(ls.front()->expr),
+            " with value ",
+            ls.front()->expr,
+            ", complete expression: ",
+            pu->expr,
+            "."
+          ),
           ls.front()->pos
         );
       }
 
       auto const& fn = as_function(ls.front()->expr);
-      
-      // insert special syntax for evaluating arguments when macro
       if (!fn.macro) {
         for (::std::size_t i = 1; i < ls.size(); ++i) {
           auto& child = ls[i];

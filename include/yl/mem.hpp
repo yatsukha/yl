@@ -84,7 +84,8 @@ namespace yl {
         case 1:
           return str[0];
         default:
-          return str[0] ^ str[1];
+          return (static_cast<::std::size_t>(str[0]) << 8) 
+                  ^ static_cast<::std::size_t>(str[1]);
       }
     }
   };

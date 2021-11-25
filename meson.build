@@ -17,7 +17,10 @@ executable(
   override_options: [
     'cpp_std=c++17',
   ],
+  cpp_args: [
+    '-march=native',
+  ],
   dependencies: [
     dependency('readline'),
-  ],  
+  ],
 )
