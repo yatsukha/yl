@@ -81,7 +81,7 @@ yl> ((\(a)
                          ^
 Symbol a is undefined.
 yl> ((\(a)
-...    (my-eval-macro (* a a)))
+...    (my-eval-syntax-macro (* a a)))
 ...  8)
 64
  ```
