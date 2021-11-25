@@ -268,6 +268,7 @@ window.setTimeout(() => {
             term.jump(1);
             term.pop();
           }
+          preventDefault(event);
           break;
         case 9:
           term.append('  ');
