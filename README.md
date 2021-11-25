@@ -85,7 +85,7 @@ yl> ((\(a)
 ...  8)
 64
  ```
- * tail recursion optimization that can be user implemented (see [.predef.yl](https://github.com/yatsukha/yl/blob/master/.predef.yl))
+ * tail recursion optimization that can be user implemented (see [.predef.yl](https://github.com/yatsukha/yl/blob/master/.predef.yl#L55-L79))
  ```
 yl> (fn repeat
 ...   (n expr)
