@@ -183,9 +183,13 @@ namespace yl {
     ::std::ostream dev_null{nullptr};
     handle_file(::std::move(in), dev_null, ss);
 
+    if (ss.str().size()) {
+      ::std::cout << ss.str() << "\n";
+    }
+
     return make_string(
       ss.str().size()
-        ? "errors in predef, please interpret it directly for more details"
+        ? "errors in predef"
         : ""
     );
   }

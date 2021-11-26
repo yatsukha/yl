@@ -150,7 +150,9 @@ namespace yl {
       ),
       BUILTIN_MACRO(
         "__while",
-        "Used exclusively for library optimization. Do not use in regular code.",
+        "Used exclusively for library optimization. Do not use in regular code.\n"
+        "This is required to allow users to write trampolining tail recursion\n"
+        "optimization, since you need a procedural while to achieve it.",
         while_m
       ),
       BUILTIN(
@@ -182,6 +184,11 @@ namespace yl {
         "time-ms",
         "Retrieves the time since epoch in milliseconds.",
         time_ms_m
+      ),
+      BUILTIN(
+        "null?",
+        "Checks whether the value is ().",
+        is_null_m
       ),
     }, 1000
 #ifndef __EMSCRIPTEN__

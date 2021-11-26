@@ -1,5 +1,7 @@
 ; PREDEF, do not touch
 
+def (do) (\ (& actions) (last actions))
+
 (def unpack
   (\s (f l) "unpack + (1 2 3) <=> eval (cons (q +) (q (1 2 3)))"
       (eval (cons (eval f) (eval l)))))
@@ -12,10 +14,6 @@
 
 (fn pack (f & xs) "pack eval + 1 2 3 <=> eval (q (+ 1 2 3))"
          (f xs))
-
-(fn repeat (n expr) 
-           (if n 
-             (cons expr (repeat (- n 1) expr))))
 
 (def and
   (\s (& conditions)
@@ -65,25 +63,28 @@
         (q arglist)))))
 
 (def tail-rec
-  (\m (recurse_aux args body)
-      (\
-        ,args
-        (do
-          (= inner_function 
-            (\ ,args ,(tail-rec-helper recurse_aux body)))
-          (= control (unpack inner_function args))
-          (__while 
-            (and (list? control) (== recurse_aux (head control)))
-            (= control 
-              (unpack inner_function (q-all (tail control)))))
-          (control)))))
+  (\m (recurse-keyword lambda)
+      "Tail recursion optimization. (tail-rec <recursion keyword> (\\(args) (<recursion keyword> (something-something args))))."
+      (do
+        (decomp (_ arg-list body) lambda)
+        (\ ,arg-list
+           (do
+             (= inner_function 
+               (\ ,arg-list
+                  ,(tail-rec-helper recurse-keyword body)))
+             (= control (unpack inner_function arg-list))
+             (__while 
+               (and (list? control) (== recurse-keyword (head control)))
+               (= control 
+                 (unpack inner_function (q-all (tail control)))))
+             (control))))))
 
 (def repeat
   (tail-rec recurse
-    (n expr acc)
-    (if (== 0 n)
-      acc
-      (recurse (- n 1) expr (cons expr acc)))))
+    (\(n expr acc)
+      (if (== 0 n)
+        acc
+        (recurse (- n 1) expr (cons expr acc))))))
 ;;
 ;;fun {reversed l} "Reverses a given Q expression. 'eval (reversed {2 1 +})'" {
 ;;  if (< 2 (len l)) 
@@ -103,7 +104,6 @@
 ;;  "Increasing sequence from a to b, b is excluded." 
 ;;  {range_step a b 1})
 ;;
-def (do) (\ (& actions) (last actions))
 ;;
 ;;fun {let body} "Opens up a new scope." { (\{} body) }
 ;;

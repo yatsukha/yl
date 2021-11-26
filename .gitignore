@@ -1,5 +1,6 @@
 # added
-
+benchmarks/
+profiling/
 
 *.js
 *.wasm

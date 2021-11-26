@@ -1025,7 +1025,8 @@ namespace yl {
         break;
       }
 
-      eval(args[2], env);
+      auto const ret = eval(args[2], env);
+      RETURN_IF_ERROR(ret);
     }    
 
     SUCCEED_WITH(u->pos, make_list());
@@ -1070,6 +1071,13 @@ namespace yl {
         .count();
 
     SUCCEED_WITH(u->pos, millis);
+  }
+
+  inline result_type is_null_m(unit_ptr const& u, env_node_ptr&) noexcept {
+    return cast_list(u).collect(
+      [u](auto&&) { return make_shared<unit>(u->pos, false); },
+      [u](auto&& l) { return make_shared<unit>(u->pos, false);}
+    );
   }
 
 }
